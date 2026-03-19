@@ -63,7 +63,7 @@ jobs:
 
     name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -165,7 +165,14 @@ jobs:
       - name: Compute SHA-256
         working-directory: packages/hakobu-fetch
         shell: bash
-        run: shasum -a 256 "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+        run: |
+          # Use sha256sum (Linux, Windows Git Bash) or shasum (macOS fallback).
+          # Both produce the same output format: "<hash>  <file>"
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -209,7 +216,7 @@ jobs:
 
     name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4

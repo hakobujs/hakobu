@@ -54,8 +54,11 @@ function getConfigureArgs(_major: number, targetPlatform: string, targetArch: st
     args.push('--fully-static');
   }
 
-  // LTO on all non-Windows platforms (Node 12+, always true for Node 24).
-  if (hostPlatform !== 'win') {
+  // LTO on all non-Windows platforms. Controlled by HAKOBU_ENABLE_LTO env var.
+  // LTO significantly increases link time (30+ minutes) but produces smaller,
+  // faster binaries. Defaults to off for faster CI iteration. Release builds
+  // should set HAKOBU_ENABLE_LTO=1.
+  if (hostPlatform !== 'win' && process.env.HAKOBU_ENABLE_LTO === '1') {
     args.push('--enable-lto');
   }
 
@@ -202,8 +205,11 @@ async function compileOnWindows(
   // ETW (Event Tracing for Windows) was removed in Node 19+. No flag needed.
   // Performance counters were removed in Node 11+. No flag needed.
 
-  // Link Time Code Generation (Node 12+, always true for Node 24).
-  args.push('ltcg');
+  // Link Time Code Generation (Windows equivalent of LTO).
+  // Controlled by HAKOBU_ENABLE_LTO for consistency with Unix LTO.
+  if (process.env.HAKOBU_ENABLE_LTO === '1') {
+    args.push('ltcg');
+  }
 
   // Node 24 on Windows crashes with small-icu at icudat codegen.
   // Workaround: enable full-icu via vcbuild.bat.
