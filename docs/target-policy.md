@@ -96,6 +96,12 @@ the failure indicates a regression.
 | `linuxstatic-x64`   | Docker           | Docker                | `ubuntu-latest`   |
 | `linuxstatic-arm64` | Docker + cross   | Docker + qemu         | `ubuntu-latest`   |
 
+**`linuxstatic-arm64` alpha status: blocked.** The `muslcc/x86_64:aarch64-linux-musl`
+cross-compiler ships a GCC version that cannot compile Node 24's `deps/ada/ada.h`
+(C++20 `constexpr` incompatibility). This target is excluded from alpha CI until
+a newer musl cross-toolchain is available or a native arm64 Alpine build path is
+established. It is Tier 2 / best-effort and does not block alpha releases.
+
 Rationale:
 - `macos-x64` is included because Intel Macs remain in active use, but Apple
   Silicon is the primary verification target. Rosetta 2 on `macos-latest` can

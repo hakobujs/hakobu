@@ -22,18 +22,21 @@ RUN dnf install -y \
 
 RUN alternatives --set python3 /usr/bin/python3.12
 
-# Install Node.js 24 (used to run the hakobu-fetch build pipeline)
+# Install Node.js 24 (used to run lib-es5/bin.js — the build pipeline)
 RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
 RUN dnf install -y nodejs
 
+# Copy pre-built source tree. lib-es5/ must already exist (built by CI
+# runner with deterministic deps via pnpm --frozen-lockfile).
 COPY . ./
 
 ARG HAKOBU_FETCH_OPTION_n
 
-# Install deps and compile TypeScript.
-# These are build-pipeline tools only — they do not affect the output binary.
-# The output binary is determined by Node source + patches + compiler.
-RUN npm install --ignore-scripts && npm run build
+# Install production deps only — these are pure-JS packages (semver,
+# tar-fs, node-fetch, etc.) used to run the build pipeline. They do not
+# affect the output binary, which is determined by Node source + patches
+# + compiler toolchain.
+RUN npm install --production --ignore-scripts
 
 RUN source /opt/rh/gcc-toolset-13/enable && \
     node lib-es5/bin.js --node-range $HAKOBU_FETCH_OPTION_n --output dist

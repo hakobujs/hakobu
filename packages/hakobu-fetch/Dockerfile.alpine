@@ -36,12 +36,11 @@ ENV AR_host=ar
 ENV NM_host=nm
 ENV READELF_host=readelf
 
+# Copy pre-built source tree. lib-es5/ must already exist.
 COPY . ./
 
-# Install deps and compile TypeScript.
-# These are build-pipeline tools only — they do not affect the output binary.
-# The output binary is determined by Node source + patches + compiler.
-RUN npm install --ignore-scripts && npm run build
+# Production deps only (see Dockerfile.linux for rationale).
+RUN npm install --production --ignore-scripts
 
 RUN node lib-es5/bin.js --arch $HAKOBU_FETCH_OPTION_a --node-range $HAKOBU_FETCH_OPTION_n --platform $HAKOBU_FETCH_OPTION_p --output dist
 
