@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# build output
+lib-es5/
+dist/
+
+# pnpm
+.pnpm-debug.log
+
+# typescript
+*.tsbuildinfo
+
+# logs
+npm-debug.log
+yarn-error.log
+
+# macOS
+.DS_Store
+
+# editors
+.idea/
+*.swp
+*.swo
+
+# test artifacts
+*.exe
+
+# environment
+.env
+.env.local

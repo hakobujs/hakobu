@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "allowJs": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "lib-es5",
+    "rootDir": "./lib",
+    "strict": true,
+    "esModuleInterop": true,
+    "incremental": false,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": ["lib/**/*"]
+}

@@ -1,0 +1,47 @@
+FROM alpine:3.22 AS build
+
+ARG PKG_FETCH_OPTION_a
+ARG PKG_FETCH_OPTION_n
+ARG PKG_FETCH_OPTION_p
+
+WORKDIR /root/pkg-fetch/
+
+RUN apk add --no-cache \
+    build-base \
+    git \
+    linux-headers \
+    npm \
+    python3 \
+    python3-dev \
+    yarn \
+    pkgconfig \
+    zlib-dev \
+    openssl-dev
+
+# https://gitlab.alpinelinux.org/alpine/aports/-/issues/8626
+ENV CFLAGS=-U_FORTIFY_SOURCE
+ENV CFLAGS_host=-U_FORTIFY_SOURCE
+ENV CXXFLAGS=-U_FORTIFY_SOURCE
+ENV CXXFLAGS_host=-U_FORTIFY_SOURCE
+
+ENV CC=gcc
+ENV CXX=g++
+ENV AR=ar
+ENV NM=nm
+ENV READELF=readelf
+ENV STRIP=strip
+
+ENV CC_host=gcc
+ENV CXX_host=g++
+ENV AR_host=ar
+ENV NM_host=nm
+ENV READELF_host=readelf
+
+COPY . ./
+
+RUN yarn install --ignore-engines
+
+RUN yarn start --arch $PKG_FETCH_OPTION_a --node-range $PKG_FETCH_OPTION_n --platform $PKG_FETCH_OPTION_p --output dist
+
+FROM scratch
+COPY --from=build /root/pkg-fetch/dist /
