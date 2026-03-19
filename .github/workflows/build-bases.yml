@@ -224,20 +224,14 @@ jobs:
       - name: Pre-build hakobu-fetch TypeScript
         run: pnpm --filter @hakobu/hakobu-fetch build
 
-      - name: Build in Docker
+      - name: Build in Docker and extract binary
         run: |
-          docker build \
+          DOCKER_BUILDKIT=1 docker build \
             -f packages/hakobu-fetch/${{ matrix.dockerfile }} \
-            -t hakobu-fetch-${{ matrix.target }} \
+            --output type=local,dest=docker-out \
             --build-arg HAKOBU_FETCH_OPTION_n=${{ env.NODE_RANGE }} \
             ${{ matrix.extra_build_args }} \
             packages/hakobu-fetch
-
-      - name: Extract binary from container
-        run: |
-          id=$(docker create hakobu-fetch-${{ matrix.target }})
-          docker cp "$id:/." ./docker-out/
-          docker rm "$id"
           ls -lh docker-out/
 
       - name: Verify — version + bytecode
@@ -331,21 +325,15 @@ jobs:
       - name: Pre-build hakobu-fetch TypeScript
         run: pnpm --filter @hakobu/hakobu-fetch build
 
-      - name: Build in Docker (cross-compile)
+      - name: Build in Docker (cross-compile) and extract binary
         run: |
-          docker build \
+          DOCKER_BUILDKIT=1 docker build \
             -f packages/hakobu-fetch/Dockerfile.linuxcross \
-            -t hakobu-fetch-linux-arm64 \
+            --output type=local,dest=docker-out \
             --build-arg HAKOBU_FETCH_OPTION_n=${{ env.NODE_RANGE }} \
             --build-arg HAKOBU_FETCH_OPTION_a=arm64 \
             --build-arg TARGET_TOOLCHAIN_ARCH=aarch64 \
             packages/hakobu-fetch
-
-      - name: Extract binary from container
-        run: |
-          id=$(docker create hakobu-fetch-linux-arm64)
-          docker cp "$id:/." ./docker-out/
-          docker rm "$id"
           ls -lh docker-out/
 
       - name: Verify — version + bytecode (arm64 container via QEMU)
