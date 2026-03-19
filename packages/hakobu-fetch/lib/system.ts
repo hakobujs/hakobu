@@ -5,19 +5,11 @@ function getHostAbi() {
   return `m${process.versions.modules}`;
 }
 
+// Maps Node ABI module version to a node range string.
+// Hakobu only supports Node 24+. Legacy ABI values are rejected.
 export function abiToNodeRange(abi: string) {
-  if (/^m?14/.test(abi)) return 'node0.12';
-  if (/^m?46/.test(abi)) return 'node4';
-  if (/^m?47/.test(abi)) return 'node5';
-  if (/^m?48/.test(abi)) return 'node6';
-  if (/^m?51/.test(abi)) return 'node7';
-  if (/^m?57/.test(abi)) return 'node8';
-  if (/^m?59/.test(abi)) return 'node9';
-  if (/^m?64/.test(abi)) return 'node10';
-  if (/^m?67/.test(abi)) return 'node11';
-  if (/^m?72/.test(abi)) return 'node12';
-  if (/^m?79/.test(abi)) return 'node13';
-  if (/^m?83/.test(abi)) return 'node14';
+  if (/^m?137/.test(abi)) return 'node24';
+  // Pass through anything that already looks like a node range (e.g. 'node24')
   return abi;
 }
 

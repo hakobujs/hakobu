@@ -9,19 +9,21 @@
     Node 24 objective
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 11.1_
 
-- [ ] 2. Define the supported target matrix and release contract
-  - [ ] 2.1 Record first-release targets and deferred targets
+- [x] 2. Define the supported target matrix and release contract
+  - [x] 2.1 Record first-release targets and deferred targets
     - Decide which targets are release blockers for alpha, beta, and v1
     - Record native-build versus cross-build expectations per target
     - _Requirements: 10.1, 10.2, 10.3, 11.4, 14.4_
+    - **Output:** `docs/target-policy.md`
 
-  - [ ] 2.2 Define artifact naming, versioning, and checksum rules
+  - [x] 2.2 Define artifact naming, versioning, and checksum rules
     - Standardize patched base binary names and final executable metadata
     - Define GitHub Release artifact layout and provenance metadata shape
     - _Requirements: 2.1, 11.2, 11.3, 13.2_
+    - **Output:** `docs/release-contract.md`
 
 - [ ] 3. Bring `hakobu-fetch` to Node 24
-  - [ ] 3.1 Rebase the patched runtime build pipeline onto Node 24.x
+  - [x] 3.1 Rebase the patched runtime build pipeline onto Node 24.x
     - Port inherited `pkg-fetch` build logic and patch application to Node 24
     - Separate platform-independent and platform-specific patch sets
     - _Requirements: 2.1, 2.3, 13.2_

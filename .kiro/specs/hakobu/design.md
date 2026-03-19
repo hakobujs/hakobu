@@ -572,7 +572,8 @@ Compatibility priority:
 
 These are implementation questions, not blockers for the initial spec:
 
-- whether `win-arm64` should be first-release or deferred
+- ~~whether `win-arm64` should be first-release or deferred~~
+  **Resolved:** deferred (Tier 3). See `docs/target-policy.md`.
 - whether bundle mode ships in alpha or after native mode is stable
 - how much of the old `pkg` config schema should be accepted verbatim
 - whether native addon extraction uses temp or content-addressed cache by default

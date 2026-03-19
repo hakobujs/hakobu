@@ -15,8 +15,8 @@ import { log, wasReported } from './log';
 import patchesJson from '../patches/patches.json';
 
 const buildPath = path.resolve(
-  process.env.PKG_BUILD_PATH ||
-    path.join(os.tmpdir(), `pkg.${crypto.randomBytes(12).toString('hex')}`)
+  process.env.HAKOBU_BUILD_PATH ||
+    path.join(os.tmpdir(), `hakobu.${crypto.randomBytes(12).toString('hex')}`)
 );
 const nodePath = path.join(buildPath, 'node');
 const patchesPath = path.resolve(__dirname, '../patches');
@@ -29,57 +29,57 @@ function getMajor(nodeVersion: string) {
   return Number(version) | 0;
 }
 
-function getConfigureArgs(major: number, targetPlatform: string, targetArch: string): string[] {
+// --- Platform-independent configure flags ---
+// These flags apply to all Node 24 builds regardless of target platform.
+
+// --- Platform-specific configure flags ---
+// Flags that vary by target platform or host environment.
+
+function getConfigureArgs(_major: number, targetPlatform: string, targetArch: string): string[] {
   const args: string[] = [];
 
-  // first of all v8_inspector introduces the use
-  // of `prime_rehash_policy` symbol that requires
-  // GLIBCXX_3.4.18 on some systems
-  // also we don't support any kind of debugging
-  // against packaged apps, hence v8_inspector is useless
+  // Disable inspector — packaged apps don't support debugging against the
+  // patched binary, and v8_inspector pulls in symbols that require newer
+  // GLIBCXX on some systems.
   args.push('--without-inspector');
 
-  if (hostPlatform === 'alpine') {
-    // Statically Link against libgcc and libstdc++ libraries. See vercel/pkg#555.
-    // libgcc and libstdc++ grant GCC Runtime Library Exception of GPL
+  // [platform-specific: alpine] Statically link libgcc and libstdc++.
+  // Skip when target is linuxstatic since --fully-static supersedes this.
+  if (hostPlatform === 'alpine' && targetPlatform !== 'linuxstatic') {
     args.push('--partly-static');
   }
 
+  // [platform-specific: linuxstatic] Fully static binary.
   if (targetPlatform === 'linuxstatic') {
     args.push('--fully-static');
   }
 
-  // Link Time Optimization
-  if (major >= 12) {
-    if (hostPlatform !== 'win') {
-      args.push('--enable-lto');
-    }
+  // LTO on all non-Windows platforms (Node 12+, always true for Node 24).
+  if (hostPlatform !== 'win') {
+    args.push('--enable-lto');
   }
 
-  // production binaries do NOT take NODE_OPTIONS from end-users
+  // Production binaries do NOT take NODE_OPTIONS from end-users.
   args.push('--without-node-options');
 
-  // The dtrace and etw support was removed in https://github.com/nodejs/node/commit/aa3a572e6bee116cde69508dc29478b40f40551a
-  if (major <= 18) {
-    // DTrace
-    args.push('--without-dtrace');
-  }
+  // DTrace/ETW support was removed in Node 19+. No flag needed for Node 24.
 
-  // bundled npm package manager
+  // No bundled npm.
   args.push('--without-npm');
 
-  // Small ICU
-  if (hostPlatform !== 'win' || major < 24) {
+  // ICU configuration.
+  // Node 24 on Windows uses full-icu via vcbuild.bat (see compileOnWindows).
+  // All other platforms use small-icu.
+  if (hostPlatform !== 'win') {
     args.push('--with-intl=small-icu');
   }
 
-  // Workaround for nodejs/node#39313
-  // All supported macOS versions have zlib as a system library
+  // [platform-specific: macos] Use system zlib.
   if (targetPlatform === 'macos') {
     args.push('--shared-zlib');
   }
-  
-  // macos cross-build from arm64 to x64
+
+  // [platform-specific: macos] Cross-build from arm64 host to x64 target.
   if (targetPlatform === 'macos' && hostArch === 'arm64' && targetArch === 'x64') {
     args.push('--dest-os=mac');
     args.push('--dest-cpu=x64');
@@ -188,6 +188,8 @@ export async function fetchExtractApply(
   await applyPatches(nodeVersion);
 }
 
+// --- Windows build (platform-specific) ---
+
 async function compileOnWindows(
   nodeVersion: string,
   targetArch: string,
@@ -197,37 +199,16 @@ async function compileOnWindows(
   const major = getMajor(nodeVersion);
   const config_flags = getConfigureArgs(major, targetPlatform, targetArch);
 
-  // The dtrace and etw support was removed in https://github.com/nodejs/node/commit/aa3a572e6bee116cde69508dc29478b40f40551a
-  if (major <= 18) {
-    // Event Tracing for Windows
-    args.push('noetw');
-  }
+  // ETW (Event Tracing for Windows) was removed in Node 19+. No flag needed.
+  // Performance counters were removed in Node 11+. No flag needed.
 
-  // Performance counters on Windows
-  if (major <= 10) {
-    args.push('noperfctr');
-  }
+  // Link Time Code Generation (Node 12+, always true for Node 24).
+  args.push('ltcg');
 
-  // Link Time Code Generation
-  if (major >= 12) {
-    args.push('ltcg');
-  }
-
-  // Node24 builds on Windows crash with small-icu at icudat codegen
-  // workaround for now is to enable full-icu
-  // TODO check with newer node/tooling/gh-image versions
-  if (major >= 24) {
-    args.push('full-icu');
-  }
-
-  // Can't cross compile for arm64 with small-icu
-  if (
-    major < 24 &&
-    hostArch !== targetArch &&
-    !config_flags.includes('--with-intl=full-icu')
-  ) {
-    config_flags.push('--without-intl');
-  }
+  // Node 24 on Windows crashes with small-icu at icudat codegen.
+  // Workaround: enable full-icu via vcbuild.bat.
+  // TODO: check with newer node/tooling/gh-image versions
+  args.push('full-icu');
 
   await spawn('cmd', args, {
     cwd: nodePath,
@@ -235,14 +216,14 @@ async function compileOnWindows(
     stdio: 'inherit',
   });
 
-  if (major <= 10) {
-    return path.join(nodePath, 'Release/node.exe');
-  }
-
+  // Node 11+ output path (always true for Node 24).
   return path.join(nodePath, 'out/Release/node.exe');
 }
 
 const { MAKE_JOB_COUNT = os.cpus().length } = process.env;
+
+// --- Unix build (platform-specific) ---
+// Handles Linux (glibc, static, alpine/musl), macOS, and FreeBSD.
 
 async function compileOnUnix(
   nodeVersion: string,

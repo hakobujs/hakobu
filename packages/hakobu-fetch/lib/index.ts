@@ -24,7 +24,7 @@ async function download(
   { tag, name }: Remote,
   local: string
 ): Promise<boolean> {
-  const url = `https://github.com/yao-pkg/pkg-fetch/releases/download/${tag}/${name}`;
+  const url = `https://github.com/hakobujs/hakobu/releases/download/${tag}/${name}`;
 
   try {
     await downloadUrl(url, local);
@@ -115,10 +115,23 @@ export async function need(opts: NeedOptions) {
     output,
   });
   const remote = remotePlace({ arch, nodeVersion, platform, version });
+  const expectedHash = EXPECTED_HASHES[remote.name];
 
   let fetchFailed;
 
-  if (!forceBuild) {
+  if (forceFetch && !expectedHash) {
+    throw wasReported(
+      `No published checksum for '${remote.name}'. Build the base locally or set HAKOBU_NODE_PATH.`
+    );
+  }
+
+  if (!forceBuild && !expectedHash && !dryRun) {
+    log.info(
+      `No published Hakobu base checksum for '${remote.name}'. Skipping remote fetch and falling back to local build.`
+    );
+  }
+
+  if (!forceBuild && expectedHash) {
     if (await exists(fetched)) {
       if (dryRun) {
         return 'exists';
@@ -126,8 +139,8 @@ export async function need(opts: NeedOptions) {
 
       // when node path is set, skip hash check
       if (
-        !!process.env.PKG_NODE_PATH ||
-        (await hash(fetched)) === EXPECTED_HASHES[remote.name]
+        !!process.env.HAKOBU_NODE_PATH ||
+        (await hash(fetched)) === expectedHash
       ) {
         return fetched;
       }
@@ -146,11 +159,11 @@ export async function need(opts: NeedOptions) {
     }
   }
 
-  if (!forceBuild) {
+  if (!forceBuild && expectedHash) {
     if (dryRun) return 'fetched';
 
     if (await download(remote, fetched)) {
-      if ((await hash(fetched)) === EXPECTED_HASHES[remote.name]) {
+      if ((await hash(fetched)) === expectedHash) {
         return fetched;
       }
 

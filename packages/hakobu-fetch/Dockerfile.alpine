@@ -1,10 +1,10 @@
 FROM alpine:3.22 AS build
 
-ARG PKG_FETCH_OPTION_a
-ARG PKG_FETCH_OPTION_n
-ARG PKG_FETCH_OPTION_p
+ARG HAKOBU_FETCH_OPTION_a
+ARG HAKOBU_FETCH_OPTION_n
+ARG HAKOBU_FETCH_OPTION_p
 
-WORKDIR /root/pkg-fetch/
+WORKDIR /root/hakobu-fetch/
 
 RUN apk add --no-cache \
     build-base \
@@ -13,7 +13,6 @@ RUN apk add --no-cache \
     npm \
     python3 \
     python3-dev \
-    yarn \
     pkgconfig \
     zlib-dev \
     openssl-dev
@@ -39,9 +38,10 @@ ENV READELF_host=readelf
 
 COPY . ./
 
-RUN yarn install --ignore-engines
+# Deterministic install via package-lock.json, then compile TypeScript
+RUN npm ci --ignore-scripts && npm run build
 
-RUN yarn start --arch $PKG_FETCH_OPTION_a --node-range $PKG_FETCH_OPTION_n --platform $PKG_FETCH_OPTION_p --output dist
+RUN node lib-es5/bin.js --arch $HAKOBU_FETCH_OPTION_a --node-range $HAKOBU_FETCH_OPTION_n --platform $HAKOBU_FETCH_OPTION_p --output dist
 
 FROM scratch
-COPY --from=build /root/pkg-fetch/dist /
+COPY --from=build /root/hakobu-fetch/dist /

@@ -1,0 +1,465 @@
+name: Build Base Binaries
+
+# Build patched Node v24.14.0 base binaries for all Tier 1 and Tier 2 targets.
+# See docs/target-policy.md for the full target matrix and verification rules.
+# See docs/release-contract.md for artifact naming and checksum format.
+#
+# This workflow is CI proof — it builds, verifies, and uploads artifacts.
+# It does NOT publish GitHub Releases (that is Task 13 scope).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "packages/hakobu-fetch/**"
+      - ".github/workflows/build-bases.yml"
+
+env:
+  NODE_RANGE: node24
+  NODE_VERSION: v24.14.0
+
+concurrency:
+  group: build-bases-${{ github.ref }}
+  cancel-in-progress: true
+
+# ═══════════════════════════════════════════════════════════════════════
+# The verification script used by every target.
+# Checks: Node version, ABI, and V8 sourceless-bytecode roundtrip.
+# ═══════════════════════════════════════════════════════════════════════
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────
+  # Native builds — macOS and Windows
+  # ─────────────────────────────────────────────────────────────────────
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Tier 1: macos-arm64 — native build, native verification
+          - target: macos-arm64
+            os: macos-latest
+            platform: macos
+            arch: arm64
+            tier: 1
+            artifact: hakobu-base-v24.14.0-macos-arm64
+
+          # Tier 2: macos-x64 — cross-build on arm64 host, Rosetta verification
+          - target: macos-x64
+            os: macos-latest
+            platform: macos
+            arch: x64
+            tier: 2
+            artifact: hakobu-base-v24.14.0-macos-x64
+
+          # Tier 1: win-x64 — native build, native verification
+          - target: win-x64
+            os: windows-latest
+            platform: win
+            arch: x64
+            tier: 1
+            artifact: hakobu-base-v24.14.0-win-x64
+
+    name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build hakobu-fetch
+        run: pnpm --filter @hakobu/hakobu-fetch build
+
+      - name: Build patched Node base binary
+        working-directory: packages/hakobu-fetch
+        run: >
+          node lib-es5/bin.js
+          --node-range ${{ env.NODE_RANGE }}
+          --platform ${{ matrix.platform }}
+          --arch ${{ matrix.arch }}
+          --force-build
+          --output dist
+        shell: bash
+
+      # ── macos-x64 Rosetta gate ──
+      # macos-x64 is cross-compiled on an arm64 runner. The x64 binary
+      # must be verified under Rosetta 2. We use `arch -x86_64` to force
+      # Rosetta execution and fail explicitly if Rosetta is unavailable.
+      - name: Check Rosetta availability (macos-x64 only)
+        if: matrix.target == 'macos-x64'
+        run: |
+          if ! arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "::error::Rosetta 2 is not available on this runner. Cannot verify macos-x64 binary."
+            exit 1
+          fi
+          echo "Rosetta 2: available"
+
+      - name: Verify — version + bytecode
+        working-directory: packages/hakobu-fetch
+        shell: bash
+        run: |
+          # hakobu-fetch outputs base binaries without file extensions,
+          # even on Windows. The .exe extension is added later by the
+          # packaging step, not the fetch/build step.
+          binary="dist/node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+
+          # On macos-x64, force execution through Rosetta
+          run_prefix=""
+          if [ "${{ matrix.target }}" = "macos-x64" ]; then
+            run_prefix="arch -x86_64"
+          fi
+
+          echo "::group::Binary info"
+          ls -lh "$binary"
+          file "$binary" || true
+          echo "::endgroup::"
+
+          echo "::group::Version + ABI check"
+          PKG_EXECPATH=PKG_INVOKE_NODEJS $run_prefix "$binary" -e "
+            var assert = require('assert');
+            var v = process.version;
+            var m = process.versions.modules;
+            console.log('version:', v, '  ABI:', m, '  arch:', process.arch);
+            assert(v.startsWith('v24.'), 'Expected v24.x, got ' + v);
+            assert(m === '137', 'Expected ABI 137, got ' + m);
+            console.log('version-check: PASS');
+          "
+          echo "::endgroup::"
+
+          echo "::group::V8 bytecode (sourceless cachedData)"
+          PKG_EXECPATH=PKG_INVOKE_NODEJS $run_prefix "$binary" -e "
+            var vm = require('vm');
+            var assert = require('assert');
+            var text = '(function () { return 42; })';
+
+            var s1 = new vm.Script(text, { filename: 's1', produceCachedData: true, sourceless: true });
+            assert(s1.cachedDataProduced, 's1.cachedDataProduced');
+            var cd = s1.cachedData;
+
+            var s2 = new vm.Script(undefined, { filename: 's2', cachedData: cd, sourceless: true });
+            var result = s2.runInThisContext()();
+            assert.equal(result, 42, 'sourceless execution must return 42');
+
+            var s3 = new vm.Script(text, { filename: 's3', produceCachedData: true });
+            assert(s3.cachedDataProduced, 's3.cachedDataProduced');
+
+            console.log('bytecode-verify: PASS');
+          "
+          echo "::endgroup::"
+
+      - name: Rename to release contract name
+        working-directory: packages/hakobu-fetch
+        shell: bash
+        run: mv "dist/node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}" "${{ matrix.artifact }}"
+
+      - name: Compute SHA-256
+        working-directory: packages/hakobu-fetch
+        shell: bash
+        run: shasum -a 256 "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            packages/hakobu-fetch/${{ matrix.artifact }}*
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Docker-based Linux x64 builds
+  # linux-x64: OracleLinux 8 (old glibc for broad compatibility)
+  # linuxstatic-x64: Alpine (musl, fully static binary)
+  #
+  # Verification: run extracted binary directly on ubuntu-latest.
+  # linux-x64 works because ubuntu glibc >= OracleLinux 8 glibc.
+  # linuxstatic-x64 works because it's fully static.
+  # ─────────────────────────────────────────────────────────────────────
+  build-linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-x64
+            platform: linux
+            arch: x64
+            tier: 1
+            dockerfile: Dockerfile.linux
+            extra_build_args: ""
+            artifact: hakobu-base-v24.14.0-linux-x64
+
+          - target: linuxstatic-x64
+            platform: linuxstatic
+            arch: x64
+            tier: 2
+            dockerfile: Dockerfile.alpine
+            extra_build_args: >-
+              --build-arg HAKOBU_FETCH_OPTION_p=linuxstatic
+              --build-arg HAKOBU_FETCH_OPTION_a=x64
+            artifact: hakobu-base-v24.14.0-linuxstatic-x64
+
+    name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build in Docker
+        run: |
+          docker build \
+            -f packages/hakobu-fetch/${{ matrix.dockerfile }} \
+            -t hakobu-fetch-${{ matrix.target }} \
+            --build-arg HAKOBU_FETCH_OPTION_n=${{ env.NODE_RANGE }} \
+            ${{ matrix.extra_build_args }} \
+            packages/hakobu-fetch
+
+      - name: Extract binary from container
+        run: |
+          id=$(docker create hakobu-fetch-${{ matrix.target }})
+          docker cp "$id:/." ./docker-out/
+          docker rm "$id"
+          ls -lh docker-out/
+
+      - name: Verify — version + bytecode
+        run: |
+          binary="docker-out/node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+          chmod +x "$binary"
+
+          echo "::group::Binary info"
+          ls -lh "$binary"
+          file "$binary"
+          echo "::endgroup::"
+
+          echo "::group::Version + ABI check"
+          PKG_EXECPATH=PKG_INVOKE_NODEJS "$binary" -e "
+            var assert = require('assert');
+            var v = process.version;
+            var m = process.versions.modules;
+            console.log('version:', v, '  ABI:', m, '  arch:', process.arch);
+            assert(v.startsWith('v24.'), 'Expected v24.x, got ' + v);
+            assert(m === '137', 'Expected ABI 137, got ' + m);
+            console.log('version-check: PASS');
+          "
+          echo "::endgroup::"
+
+          echo "::group::V8 bytecode (sourceless cachedData)"
+          PKG_EXECPATH=PKG_INVOKE_NODEJS "$binary" -e "
+            var vm = require('vm');
+            var assert = require('assert');
+            var text = '(function () { return 42; })';
+
+            var s1 = new vm.Script(text, { filename: 's1', produceCachedData: true, sourceless: true });
+            assert(s1.cachedDataProduced, 's1.cachedDataProduced');
+            var cd = s1.cachedData;
+
+            var s2 = new vm.Script(undefined, { filename: 's2', cachedData: cd, sourceless: true });
+            var result = s2.runInThisContext()();
+            assert.equal(result, 42, 'sourceless execution must return 42');
+
+            var s3 = new vm.Script(text, { filename: 's3', produceCachedData: true });
+            assert(s3.cachedDataProduced, 's3.cachedDataProduced');
+
+            console.log('bytecode-verify: PASS');
+          "
+          echo "::endgroup::"
+
+      - name: Rename to release contract name
+        run: |
+          mv "docker-out/node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}" \
+             "${{ matrix.artifact }}"
+
+      - name: Compute SHA-256
+        run: sha256sum "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}*
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Docker cross-compiled ARM64 Linux builds
+  #
+  # linux-arm64: glibc-linked, cross-compiled via gcc-12-aarch64.
+  # linuxstatic-arm64: static musl, cross-compiled via muslcc toolchain.
+  #
+  # Verification: run the binary inside an arm64 container under QEMU.
+  # QEMU binfmt_misc handles transparent arm64 container execution.
+  # For glibc binaries this provides the correct arm64 dynamic linker
+  # and sysroot. For static binaries it is not strictly required but
+  # provides a consistent verification environment.
+  #
+  # This is alpha-acceptable per docs/target-policy.md. Native arm64
+  # verification is required by beta.
+  # ─────────────────────────────────────────────────────────────────────
+  build-linux-cross:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-arm64
+            platform: linux
+            arch: arm64
+            tier: 1
+            dockerfile: Dockerfile.linuxcross
+            extra_build_args: >-
+              --build-arg HAKOBU_FETCH_OPTION_a=arm64
+              --build-arg TARGET_TOOLCHAIN_ARCH=aarch64
+            artifact: hakobu-base-v24.14.0-linux-arm64
+            verify_image: ubuntu:jammy
+
+          - target: linuxstatic-arm64
+            platform: linuxstatic
+            arch: arm64
+            tier: 2
+            dockerfile: Dockerfile.alpine-muslcc
+            extra_build_args: >-
+              --build-arg HAKOBU_FETCH_OPTION_a=arm64
+              --build-arg HAKOBU_FETCH_OPTION_p=linuxstatic
+            artifact: hakobu-base-v24.14.0-linuxstatic-arm64
+            verify_image: alpine:3.22
+
+    name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU for arm64
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build in Docker (cross-compile)
+        run: |
+          docker build \
+            -f packages/hakobu-fetch/${{ matrix.dockerfile }} \
+            -t hakobu-fetch-${{ matrix.target }} \
+            --build-arg HAKOBU_FETCH_OPTION_n=${{ env.NODE_RANGE }} \
+            ${{ matrix.extra_build_args }} \
+            packages/hakobu-fetch
+
+      - name: Extract binary from container
+        run: |
+          id=$(docker create hakobu-fetch-${{ matrix.target }})
+          docker cp "$id:/." ./docker-out/
+          docker rm "$id"
+          ls -lh docker-out/
+
+      - name: Verify — version + bytecode (arm64 container via QEMU)
+        run: |
+          binary="node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}"
+          chmod +x "docker-out/$binary"
+
+          echo "Verification: arm64 container (${{ matrix.verify_image }}) via QEMU binfmt_misc"
+          echo "Policy: alpha-acceptable, see docs/target-policy.md"
+
+          echo "::group::Binary info"
+          file "docker-out/$binary"
+          echo "::endgroup::"
+
+          # Run verification inside an arm64 container with proper sysroot.
+          # The binary is bind-mounted at /work/.
+          echo "::group::Version + ABI check (arm64 container)"
+          docker run --rm --platform linux/arm64 \
+            -v "$(pwd)/docker-out:/work:ro" \
+            -e PKG_EXECPATH=PKG_INVOKE_NODEJS \
+            ${{ matrix.verify_image }} \
+            /work/$binary -e "
+              var assert = require('assert');
+              var v = process.version;
+              var m = process.versions.modules;
+              console.log('version:', v, '  ABI:', m, '  arch:', process.arch);
+              assert(v.startsWith('v24.'), 'Expected v24.x, got ' + v);
+              assert(m === '137', 'Expected ABI 137, got ' + m);
+              console.log('version-check: PASS (arm64 container via QEMU)');
+            "
+          echo "::endgroup::"
+
+          echo "::group::V8 bytecode (arm64 container)"
+          docker run --rm --platform linux/arm64 \
+            -v "$(pwd)/docker-out:/work:ro" \
+            -e PKG_EXECPATH=PKG_INVOKE_NODEJS \
+            ${{ matrix.verify_image }} \
+            /work/$binary -e "
+              var vm = require('vm');
+              var assert = require('assert');
+              var text = '(function () { return 42; })';
+
+              var s1 = new vm.Script(text, { filename: 's1', produceCachedData: true, sourceless: true });
+              assert(s1.cachedDataProduced, 's1.cachedDataProduced');
+              var cd = s1.cachedData;
+
+              var s2 = new vm.Script(undefined, { filename: 's2', cachedData: cd, sourceless: true });
+              var result = s2.runInThisContext()();
+              assert.equal(result, 42, 'sourceless execution must return 42');
+
+              var s3 = new vm.Script(text, { filename: 's3', produceCachedData: true });
+              assert(s3.cachedDataProduced, 's3.cachedDataProduced');
+
+              console.log('bytecode-verify: PASS (arm64 container via QEMU)');
+            "
+          echo "::endgroup::"
+
+      - name: Rename to release contract name
+        run: |
+          mv "docker-out/node-${{ env.NODE_VERSION }}-${{ matrix.platform }}-${{ matrix.arch }}" \
+             "${{ matrix.artifact }}"
+
+      - name: Compute SHA-256
+        run: sha256sum "${{ matrix.artifact }}" | tee "${{ matrix.artifact }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}*
+          retention-days: 30
+
+  # ─────────────────────────────────────────────────────────────────────
+  # Aggregate all checksums into CHECKSUMS.sha256
+  # ─────────────────────────────────────────────────────────────────────
+  checksums:
+    name: Collect checksums
+    needs: [build-native, build-linux, build-linux-cross]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate combined CHECKSUMS.sha256
+        run: |
+          {
+            echo "# Hakobu patched base binaries — Node ${{ env.NODE_VERSION }}"
+            echo "# Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            find artifacts -name '*.sha256' -exec cat {} + | sort -k2
+          } > CHECKSUMS.sha256
+
+      - name: Display checksums
+        run: cat CHECKSUMS.sha256
+
+      - name: Upload combined checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: CHECKSUMS
+          path: CHECKSUMS.sha256
+          retention-days: 30

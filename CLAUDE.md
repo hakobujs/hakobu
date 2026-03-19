@@ -49,3 +49,4 @@ pnpm test
 - Uses a patched Node binary + snapshot filesystem model (not Node SEA)
 - Windows Playwright/Camoufox with custom stdio is a release-gate workload
 - Design docs and requirements live in `.kiro/specs/hakobu/`
+- Target support tiers and release rules live in `docs/`

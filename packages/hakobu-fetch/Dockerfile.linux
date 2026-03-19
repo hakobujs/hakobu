@@ -1,7 +1,7 @@
 FROM oraclelinux:8 AS build
 
 USER root:root
-WORKDIR /root/pkg-fetch/
+WORKDIR /root/hakobu-fetch/
 
 # Install required tools and enable the necessary repositories
 RUN dnf install -y oracle-epel-release-el8 oraclelinux-developer-release-el8
@@ -22,19 +22,19 @@ RUN dnf install -y \
 
 RUN alternatives --set python3 /usr/bin/python3.12
 
-# Install Node.js 20 and yarn
-RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+# Install Node.js 24 (used to run the hakobu-fetch build pipeline)
+RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash -
 RUN dnf install -y nodejs
-RUN npm install -g yarn
 
 COPY . ./
 
-ARG PKG_FETCH_OPTION_n
+ARG HAKOBU_FETCH_OPTION_n
 
-RUN yarn install --ignore-engines
+# Deterministic install via package-lock.json, then compile TypeScript
+RUN npm ci --ignore-scripts && npm run build
 
 RUN source /opt/rh/gcc-toolset-13/enable && \
-    yarn start --node-range $PKG_FETCH_OPTION_n --output dist
+    node lib-es5/bin.js --node-range $HAKOBU_FETCH_OPTION_n --output dist
 
 FROM scratch
-COPY --from=build /root/pkg-fetch/dist /
+COPY --from=build /root/hakobu-fetch/dist /

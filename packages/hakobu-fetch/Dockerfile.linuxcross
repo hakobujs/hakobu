@@ -1,14 +1,14 @@
 FROM ubuntu:jammy AS build
 
 USER root:root
-WORKDIR /root/pkg-fetch/
+WORKDIR /root/hakobu-fetch/
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update
 RUN apt-get install -y curl software-properties-common ca-certificates gnupg
 
-# Install Node.js 20
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+# Install Node.js 24 (used to run the hakobu-fetch build pipeline)
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs
 
 RUN apt-get install -y binutils g++-12 git make patch python3 python3-setuptools
@@ -32,16 +32,15 @@ ENV NM_host=nm
 ENV RANLIB_host=ranlib
 ENV READELF_host=readelf
 
-RUN npm install -g yarn
-
 COPY . ./
 
-RUN yarn install --ignore-engines
+ARG HAKOBU_FETCH_OPTION_a
+ARG HAKOBU_FETCH_OPTION_n
 
-ARG PKG_FETCH_OPTION_a
-ARG PKG_FETCH_OPTION_n
+# Deterministic install via package-lock.json, then compile TypeScript
+RUN npm ci --ignore-scripts && npm run build
 
-RUN yarn start --arch $PKG_FETCH_OPTION_a --node-range $PKG_FETCH_OPTION_n --output dist
+RUN node lib-es5/bin.js --arch $HAKOBU_FETCH_OPTION_a --node-range $HAKOBU_FETCH_OPTION_n --output dist
 
 FROM scratch
-COPY --from=build /root/pkg-fetch/dist /
+COPY --from=build /root/hakobu-fetch/dist /

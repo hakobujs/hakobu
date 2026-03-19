@@ -2,11 +2,11 @@ import { major, minor } from 'semver';
 import os from 'os';
 import path from 'path';
 
-const { PKG_CACHE_PATH } = process.env;
-const IGNORE_TAG = Boolean(process.env.PKG_IGNORE_TAG);
+const { HAKOBU_CACHE_PATH } = process.env;
+const IGNORE_TAG = Boolean(process.env.HAKOBU_IGNORE_TAG);
 
 export const cachePath =
-  PKG_CACHE_PATH || path.join(os.homedir(), '.pkg-cache');
+  HAKOBU_CACHE_PATH || path.join(os.homedir(), '.hakobu', 'cache');
 
 function tagFromVersion(version: string) {
   const mj = major(version);
@@ -37,8 +37,8 @@ export function localPlace({
 }: LocalPlaceOptions) {
   let binDir: string;
 
-  if(process.env.PKG_NODE_PATH) {
-    return path.resolve(process.env.PKG_NODE_PATH);
+  if (process.env.HAKOBU_NODE_PATH) {
+    return path.resolve(process.env.HAKOBU_NODE_PATH);
   }
 
   if (output) {

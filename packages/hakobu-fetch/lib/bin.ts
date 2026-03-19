@@ -10,7 +10,7 @@ import { version } from '../package.json';
 
 async function main() {
   const { argv } = yargs
-    .env('PKG_FETCH_OPTION_')
+    .env('HAKOBU_FETCH_OPTION_')
     .option('node-range', { alias: 'n', default: 'latest', type: 'string' })
     .option('platform', { alias: 'p', default: hostPlatform, type: 'string' })
     .option('arch', { alias: 'a', default: hostArch, type: 'string' })
