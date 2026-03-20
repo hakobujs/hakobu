@@ -47,10 +47,11 @@
     - _Requirements: 5.1, 7.3, 8.1, 9.2_
     - **Output:** `packages/hakobu/lib/manifest.ts`, `docs/manifest-design.md`
 
-  - [ ] 4.2 Port and modernize project analysis
+  - [x] 4.2 Port and modernize project analysis
     - Detect entrypoint format, package boundaries, and dependency graph
     - Preserve migration-compatible aliases for legacy `pkg` config where useful
     - _Requirements: 3.1, 4.1, 9.2, 14.2_
+    - **Output:** `packages/hakobu/lib/analyzer.ts`
 
   - [ ] 4.3 Add diagnostics for unsupported packaging patterns
     - Fail fast for unsupported dynamic resolution or addon usage
