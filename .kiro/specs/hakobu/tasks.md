@@ -65,10 +65,11 @@
     - _Requirements: 5.1, 5.2, 13.2_
     - **Output:** `packages/hakobu/lib/snapshot-index.ts`, `docs/snapshot-index-design.md`
 
-  - [ ] 5.2 Patch Node filesystem access to read from snapshot
+  - [x] 5.2 Patch Node filesystem access to read from snapshot
     - Implement or rebase support for read-only `fs` operations against snapshot
     - Preserve deterministic `stat`, `readdir`, and `realpath` behavior
     - _Requirements: 5.1, 5.3, 5.4, 5.5_
+    - **Output:** `packages/hakobu/lib/snapshot-fs.ts`
 
   - [ ] 5.3 Validate path canonicalization across platforms
     - Ensure POSIX and Windows snapshot roots map correctly to runtime paths
