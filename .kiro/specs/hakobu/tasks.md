@@ -41,10 +41,11 @@
     - **Output:** `PROVENANCE.json`, `expected-shas.json`, `docs/verification-contract.md`
 
 - [ ] 4. Refactor the package manifest and analysis pipeline
-  - [ ] 4.1 Design the normalized Hakobu packaging manifest
+  - [x] 4.1 Design the normalized Hakobu packaging manifest
     - Define internal types for scripts, assets, externals, package metadata,
       native addons, and bundle-mode config
     - _Requirements: 5.1, 7.3, 8.1, 9.2_
+    - **Output:** `packages/hakobu/lib/manifest.ts`, `docs/manifest-design.md`
 
   - [ ] 4.2 Port and modernize project analysis
     - Detect entrypoint format, package boundaries, and dependency graph
