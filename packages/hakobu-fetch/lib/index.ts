@@ -16,7 +16,7 @@ import * as system from './system';
 import { localPlace, remotePlace, Remote } from './places';
 import { log, wasReported } from './log';
 import build from './build';
-import { downloadUrl, hash, plusx } from './utils';
+import { downloadUrl, hash, plusx, spawn } from './utils';
 import patchesJson from '../patches/patches.json';
 import { version } from '../package.json';
 
@@ -34,6 +34,21 @@ async function download(
   }
 
   return true;
+}
+
+// macOS requires ad-hoc codesigning before a binary can execute.
+// Base binaries are published unsigned (signature removed during build
+// so the final packaged executable can be properly signed). We ad-hoc
+// sign the cached copy after hash verification so it is immediately
+// executable for verification and local use.
+async function signIfNeeded(local: string) {
+  if (hostPlatform === 'macos') {
+    try {
+      await spawn('codesign', ['-fds', '-', local], { stdio: 'pipe' });
+    } catch {
+      // non-fatal — binary may already be signed or on non-macOS
+    }
+  }
 }
 
 async function exists(file: string) {
@@ -142,6 +157,7 @@ export async function need(opts: NeedOptions) {
         !!process.env.HAKOBU_NODE_PATH ||
         (await hash(fetched)) === expectedHash
       ) {
+        await signIfNeeded(fetched);
         return fetched;
       }
 
@@ -164,6 +180,7 @@ export async function need(opts: NeedOptions) {
 
     if (await download(remote, fetched)) {
       if ((await hash(fetched)) === expectedHash) {
+        await signIfNeeded(fetched);
         return fetched;
       }
 
