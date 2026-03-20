@@ -59,10 +59,11 @@
     - _Requirements: 6.5, 7.4, 9.3_
 
 - [ ] 5. Rebuild the snapshot filesystem layer for Node 24
-  - [ ] 5.1 Define the new snapshot index format
+  - [x] 5.1 Define the new snapshot index format
     - Include offsets, hashes, modes, package boundaries, and file kinds
     - Preserve deterministic ordering for reproducible builds
     - _Requirements: 5.1, 5.2, 13.2_
+    - **Output:** `packages/hakobu/lib/snapshot-index.ts`, `docs/snapshot-index-design.md`
 
   - [ ] 5.2 Patch Node filesystem access to read from snapshot
     - Implement or rebase support for read-only `fs` operations against snapshot
