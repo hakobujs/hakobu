@@ -4,14 +4,9 @@
  * Analyzes a Node.js project and produces a normalized PackagingManifest.
  * This is the bridge between user config and the packaging pipeline.
  *
- * Analysis steps:
- *   1. Resolve project root and entrypoint
- *   2. Determine entrypoint module format
- *   3. Walk the dependency graph (require/import)
- *   4. Collect package.json metadata for resolution
- *   5. Classify files by kind
- *   6. Detect native addons
- *   7. Produce the manifest
+ * ESM-first: follows Node 24 semantics. .js format is determined by the
+ * nearest package.json "type" field. Packages with "exports" are flagged
+ * when the analyzer cannot fully resolve them.
  */
 
 import fs from 'fs';
@@ -32,44 +27,41 @@ import type {
   FileKind,
   CompressionType,
   ExternalArtifact,
+  DiagnosticSeverity,
   WarningCategory,
 } from './manifest';
 
 // ─────────────────────────────────────────────────────────────────────
-// Analyzer options (user-facing input, not the manifest)
+// Analyzer options
 // ─────────────────────────────────────────────────────────────────────
 
 export interface AnalyzerOptions {
-  /** Absolute path to the project root. */
   projectRoot: string;
-
-  /**
-   * Entrypoint path, relative to projectRoot or absolute.
-   * If not provided, resolved from package.json "main" or "module".
-   */
   entry?: string;
-
-  /** Explicit module format override. */
   format?: ModuleFormat;
-
-  /** Target platforms to build for. */
   targets?: RuntimeTarget[];
-
-  /** Glob patterns for additional asset files. */
   assets?: string[];
-
-  /** Package names or patterns to treat as external. */
   externals?: string[];
-
-  /** Compression type for the snapshot. */
   compression?: CompressionType;
-
-  /** Additional Node.js runtime flags. */
   runtimeFlags?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Internal state
+// Diagnostic helper
+// ─────────────────────────────────────────────────────────────────────
+
+function diag(
+  severity: DiagnosticSeverity,
+  category: WarningCategory,
+  message: string,
+  file: string | null,
+  suggestion: string | null,
+): ManifestWarning {
+  return { severity, category, message, file, suggestion };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Internal types
 // ─────────────────────────────────────────────────────────────────────
 
 interface RawPackageJson {
@@ -81,9 +73,9 @@ interface RawPackageJson {
   exports?: unknown;
   imports?: unknown;
   dependencies?: Record<string, string>;
+  pkg?: { scripts?: string[]; assets?: string[] };
 }
 
-/** Cache of parsed package.json files by directory path. */
 const packageJsonCache = new Map<string, { path: string; data: RawPackageJson } | null>();
 
 // ─────────────────────────────────────────────────────────────────────
@@ -98,7 +90,6 @@ function findNearestPackageJson(fromDir: string): { path: string; data: RawPacka
   while (dir !== root) {
     if (packageJsonCache.has(dir)) {
       const cached = packageJsonCache.get(dir)!;
-      // Backfill cache for all directories we traversed
       for (const d of visited) packageJsonCache.set(d, cached);
       return cached;
     }
@@ -109,18 +100,16 @@ function findNearestPackageJson(fromDir: string): { path: string; data: RawPacka
       try {
         const data = JSON.parse(fs.readFileSync(pjPath, 'utf8')) as RawPackageJson;
         const result = { path: pjPath, data };
-        // Cache for this dir and all dirs we walked through
         for (const d of visited) packageJsonCache.set(d, result);
         return result;
       } catch {
-        // Invalid JSON — treat as no package.json here, keep walking
+        // Invalid JSON — keep walking
       }
     }
 
     dir = path.dirname(dir);
   }
 
-  // No package.json found — cache null for all visited
   for (const d of visited) packageJsonCache.set(d, null);
   return null;
 }
@@ -134,7 +123,7 @@ function readPackageJson(pjPath: string): RawPackageJson | null {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Module format detection
+// Module format detection (Node 24 semantics)
 // ─────────────────────────────────────────────────────────────────────
 
 function detectModuleFormat(
@@ -147,14 +136,16 @@ function detectModuleFormat(
 
   const ext = path.extname(filePath);
 
+  // Node 24 rule 1: .mjs → always ESM
   if (ext === '.mjs') return { format: 'esm', source: 'extension' };
+  // Node 24 rule 2: .cjs → always CJS
   if (ext === '.cjs') return { format: 'cjs', source: 'extension' };
 
-  // .js or other — check nearest package.json "type"
+  // Node 24 rule 3: .js → check nearest package.json "type"
   const pj = findNearestPackageJson(path.dirname(filePath));
   if (pj?.data.type === 'module') return { format: 'esm', source: 'package-type' };
 
-  // Default: CJS (Node's default for .js without "type": "module")
+  // Default: CJS (Node's default when no "type" field)
   return { format: 'cjs', source: 'package-type' };
 }
 
@@ -181,20 +172,23 @@ function classifyFile(filePath: string): FileKind {
 
 function toSnapshotPath(absolutePath: string, projectRoot: string, appId: string): string {
   const relative = path.relative(projectRoot, absolutePath);
-  // Always use POSIX separators in snapshot paths
   const posix = relative.split(path.sep).join('/');
   return `/snapshot/${appId}/${posix}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Dependency extraction (require/import)
+// Dependency extraction with diagnostic tracking
 // ─────────────────────────────────────────────────────────────────────
 
-/**
- * Extract static dependency specifiers from a JS/MJS/CJS file.
- * Returns raw specifier strings (e.g., "./lib", "express", "fs").
- */
-function extractDependencies(filePath: string, format: ModuleFormat): string[] {
+interface ExtractedDep {
+  specifier: string;
+  /** true if the specifier is a non-literal expression (e.g., require(variable)) */
+  dynamic: boolean;
+  /** 'require' | 'import' | 'import-dynamic' | 'export-from' */
+  kind: string;
+}
+
+function extractDependencies(filePath: string, format: ModuleFormat): ExtractedDep[] {
   let source: string;
   try {
     source = fs.readFileSync(filePath, 'utf8');
@@ -202,12 +196,11 @@ function extractDependencies(filePath: string, format: ModuleFormat): string[] {
     return [];
   }
 
-  const specifiers: string[] = [];
+  const deps: ExtractedDep[] = [];
 
   try {
     const ast = babel.parse(source, {
       sourceType: format === 'esm' ? 'module' : 'script',
-      // Allow both import and require regardless of sourceType
       plugins: ['importMeta', 'dynamicImport'],
       allowImportExportEverywhere: true,
       allowReturnOutsideFunction: true,
@@ -215,76 +208,51 @@ function extractDependencies(filePath: string, format: ModuleFormat): string[] {
     });
 
     traverse(ast, {
-      // import "x" / import x from "x" / import { x } from "x"
-      ImportDeclaration(path) {
-        specifiers.push(path.node.source.value);
+      ImportDeclaration(p) {
+        deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'import' });
       },
 
-      // require("x")
-      CallExpression(path) {
-        const { callee, arguments: args } = path.node;
+      CallExpression(p) {
+        const { callee, arguments: args } = p.node;
 
-        // require("x")
-        if (
-          callee.type === 'Identifier' &&
-          callee.name === 'require' &&
-          args.length >= 1 &&
-          args[0].type === 'StringLiteral'
-        ) {
-          specifiers.push(args[0].value);
+        // require(...)
+        if (callee.type === 'Identifier' && callee.name === 'require' && args.length >= 1) {
+          if (args[0].type === 'StringLiteral') {
+            deps.push({ specifier: args[0].value, dynamic: false, kind: 'require' });
+          } else {
+            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'require' });
+          }
         }
 
-        // import("x")
-        if (callee.type === 'Import' && args.length >= 1 && args[0].type === 'StringLiteral') {
-          specifiers.push(args[0].value);
-        }
-      },
-
-      // export { x } from "x" / export * from "x"
-      ExportNamedDeclaration(path) {
-        if (path.node.source) {
-          specifiers.push(path.node.source.value);
+        // import(...)
+        if (callee.type === 'Import' && args.length >= 1) {
+          if (args[0].type === 'StringLiteral') {
+            deps.push({ specifier: args[0].value, dynamic: false, kind: 'import-dynamic' });
+          } else {
+            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'import-dynamic' });
+          }
         }
       },
-      ExportAllDeclaration(path) {
-        specifiers.push(path.node.source.value);
+
+      ExportNamedDeclaration(p) {
+        if (p.node.source) {
+          deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'export-from' });
+        }
+      },
+      ExportAllDeclaration(p) {
+        deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'export-from' });
       },
     });
   } catch {
-    // Parse failure — return what we have (may be empty)
+    // Parse failure — return what we have
   }
 
-  return specifiers;
+  return deps;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Module resolution
+// Module resolution (ESM-aware)
 // ─────────────────────────────────────────────────────────────────────
-
-/**
- * Resolve a specifier to an absolute file path.
- * Returns null if the specifier can't be resolved (builtin, external, etc).
- */
-function resolveSpecifier(
-  specifier: string,
-  fromFile: string,
-  warnings: ManifestWarning[]
-): string | null {
-  // Skip Node builtins
-  if (specifier.startsWith('node:') || isBuiltin(specifier)) {
-    return null;
-  }
-
-  const fromDir = path.dirname(fromFile);
-
-  // Relative specifier
-  if (specifier.startsWith('.') || specifier.startsWith('/')) {
-    return resolveRelative(specifier, fromDir);
-  }
-
-  // Bare specifier (package name)
-  return resolvePackage(specifier, fromDir, warnings);
-}
 
 const builtinSet = new Set([
   'assert', 'async_hooks', 'buffer', 'child_process', 'cluster',
@@ -298,8 +266,7 @@ const builtinSet = new Set([
 ]);
 
 function isBuiltin(specifier: string): boolean {
-  const name = specifier.split('/')[0];
-  return builtinSet.has(name);
+  return specifier.startsWith('node:') || builtinSet.has(specifier.split('/')[0]);
 }
 
 const RESOLVE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.json', '.node'];
@@ -307,29 +274,18 @@ const RESOLVE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.json', '.node'];
 function resolveRelative(specifier: string, fromDir: string): string | null {
   const base = path.resolve(fromDir, specifier);
 
-  // Exact file
-  if (fs.existsSync(base) && fs.statSync(base).isFile()) {
-    return base;
-  }
+  if (fs.existsSync(base) && fs.statSync(base).isFile()) return base;
 
-  // Try extensions
   for (const ext of RESOLVE_EXTENSIONS) {
     const withExt = base + ext;
-    if (fs.existsSync(withExt) && fs.statSync(withExt).isFile()) {
-      return withExt;
-    }
+    if (fs.existsSync(withExt) && fs.statSync(withExt).isFile()) return withExt;
   }
 
-  // Directory with index
   if (fs.existsSync(base) && fs.statSync(base).isDirectory()) {
     for (const ext of RESOLVE_EXTENSIONS) {
       const indexFile = path.join(base, `index${ext}`);
-      if (fs.existsSync(indexFile)) {
-        return indexFile;
-      }
+      if (fs.existsSync(indexFile)) return indexFile;
     }
-
-    // Check package.json main in directory
     const dirPj = path.join(base, 'package.json');
     if (fs.existsSync(dirPj)) {
       const pj = readPackageJson(dirPj);
@@ -346,63 +302,126 @@ function resolveRelative(specifier: string, fromDir: string): string | null {
   return null;
 }
 
+/**
+ * Resolve a bare package specifier. ESM-aware: when a package has an
+ * "exports" field, the analyzer flags that it used legacy fallback
+ * resolution, which may produce incorrect results for ESM-only exports.
+ */
 function resolvePackage(
   specifier: string,
-  fromDir: string,
+  fromFile: string,
   warnings: ManifestWarning[]
 ): string | null {
-  // Split "package/subpath" from "package"
-  const parts = specifier.startsWith('@')
+  const pkgName = specifier.startsWith('@')
     ? specifier.split('/').slice(0, 2).join('/')
     : specifier.split('/')[0];
-  const subpath = specifier.slice(parts.length) || '.';
+  const subpath = specifier.slice(pkgName.length) || '.';
 
-  // Walk up node_modules
-  let dir = fromDir;
+  let dir = path.dirname(fromFile);
   const root = path.parse(dir).root;
 
   while (dir !== root) {
-    const pkgDir = path.join(dir, 'node_modules', parts);
+    const pkgDir = path.join(dir, 'node_modules', pkgName);
     if (fs.existsSync(pkgDir)) {
       const pkgJsonPath = path.join(pkgDir, 'package.json');
       const pj = fs.existsSync(pkgJsonPath) ? readPackageJson(pkgJsonPath) : null;
 
+      // ── ESM diagnostic: exports field present ──
+      // When a package has "exports", Node uses ONLY the exports map for
+      // resolution (the "main" field is ignored for bare specifiers).
+      // The analyzer currently falls back to legacy resolution, which may
+      // resolve a different file than what "exports" specifies.
+      const hasExports = pj?.exports != null;
+      const hasImports = pj?.imports != null;
+
+      if (hasExports) {
+        warnings.push(diag(
+          'warning',
+          'exports-not-resolved',
+          `Package '${pkgName}' has an "exports" field. ` +
+          `Hakobu used legacy resolution for '${specifier}' which may differ ` +
+          `from what Node 24 resolves via the exports map.`,
+          fromFile,
+          `This will be resolved correctly once exports-map resolution is ` +
+          `implemented. The packaged app may fail to import this module ` +
+          `if the exports map points to a different file than "main".`,
+        ));
+      }
+
+      if (hasImports) {
+        warnings.push(diag(
+          'info',
+          'imports-not-resolved',
+          `Package '${pkgName}' has an "imports" field (subpath imports). ` +
+          `This is not yet evaluated during analysis.`,
+          fromFile,
+          `Subpath imports (#-prefixed) within this package may not be ` +
+          `resolved correctly in the packaged app.`,
+        ));
+      }
+
+      // Legacy resolution fallback
       if (subpath === '.') {
-        // Package root — resolve via main/module/index
         if (pj?.main) {
           const resolved = resolveRelative(pj.main, pkgDir);
           if (resolved) return resolved;
         }
-        // index fallback
         const resolved = resolveRelative('./index', pkgDir);
         if (resolved) return resolved;
       } else {
-        // Subpath import
         const resolved = resolveRelative(subpath, pkgDir);
         if (resolved) return resolved;
       }
 
-      // Couldn't resolve within found package
-      warnings.push({
-        category: 'unresolved-import',
-        message: `Could not resolve '${specifier}' within ${pkgDir}`,
-        file: null,
-        suggestion: 'Check that the package exports this path',
-      });
+      // Couldn't resolve — differentiate based on whether exports is the cause
+      if (hasExports) {
+        warnings.push(diag(
+          'error',
+          'exports-not-resolved',
+          `Cannot resolve '${specifier}': package '${pkgName}' uses "exports" ` +
+          `and the requested subpath is not accessible via legacy resolution.`,
+          fromFile,
+          `This package likely exposes '${subpath}' only through its exports ` +
+          `map. Hakobu does not yet resolve exports maps — this import will ` +
+          `fail in the packaged app. Consider adding the package to externals.`,
+        ));
+      } else {
+        warnings.push(diag(
+          'warning',
+          'unresolved-import',
+          `Could not resolve '${specifier}' within ${pkgDir}`,
+          fromFile,
+          'Check that the package exports this path.',
+        ));
+      }
       return null;
     }
 
     dir = path.dirname(dir);
   }
 
-  // Package not found at all
-  warnings.push({
-    category: 'unresolved-import',
-    message: `Package '${parts}' not found in node_modules`,
-    file: null,
-    suggestion: `Run 'npm install' or 'pnpm install' to install dependencies`,
-  });
+  warnings.push(diag(
+    'warning',
+    'unresolved-import',
+    `Package '${pkgName}' not found in node_modules`,
+    fromFile,
+    `Run 'npm install' or 'pnpm install' to install dependencies.`,
+  ));
   return null;
+}
+
+function resolveSpecifier(
+  specifier: string,
+  fromFile: string,
+  warnings: ManifestWarning[]
+): string | null {
+  if (isBuiltin(specifier)) return null;
+
+  if (specifier.startsWith('.') || specifier.startsWith('/')) {
+    return resolveRelative(specifier, path.dirname(fromFile));
+  }
+
+  return resolvePackage(specifier, fromFile, warnings);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -412,7 +431,6 @@ function resolvePackage(
 function findPackageBoundary(filePath: string, projectRoot: string): string | null {
   const pj = findNearestPackageJson(path.dirname(filePath));
   if (!pj) return null;
-  // Only count package.json files within the project root
   if (!pj.path.startsWith(projectRoot)) return null;
   return pj.path;
 }
@@ -422,18 +440,40 @@ function findPackageBoundary(filePath: string, projectRoot: string): string | nu
 // ─────────────────────────────────────────────────────────────────────
 
 export async function analyze(options: AnalyzerOptions): Promise<PackagingManifest> {
-  // Resolve symlinks in projectRoot so all paths are consistent
   const projectRoot = fs.realpathSync(options.projectRoot);
   const warnings: ManifestWarning[] = [];
 
-  // Clear per-analysis caches
   packageJsonCache.clear();
 
   // ── 1. Resolve project package.json ──
   const rootPjPath = path.join(projectRoot, 'package.json');
   const rootPj = fs.existsSync(rootPjPath) ? readPackageJson(rootPjPath) : null;
-
   const appId = rootPj?.name?.replace(/^@[^/]+\//, '') || path.basename(projectRoot);
+
+  // ── Legacy pkg config diagnostic ──
+  if (rootPj?.pkg) {
+    warnings.push(diag(
+      'info',
+      'legacy-pkg-config',
+      `package.json contains a "pkg" configuration section. ` +
+      `Hakobu does not yet read legacy pkg config fields (scripts, assets).`,
+      rootPjPath,
+      `Migrate to Hakobu config format or use --assets / --entry CLI flags. ` +
+      `Legacy "pkg.scripts" and "pkg.assets" globs will be supported in a future release.`,
+    ));
+  }
+
+  // ── Root-level imports map diagnostic ──
+  if (rootPj?.imports) {
+    warnings.push(diag(
+      'warning',
+      'imports-not-resolved',
+      `Project package.json uses "imports" (subpath imports). ` +
+      `#-prefixed specifiers in your code may not resolve correctly in the packaged app.`,
+      rootPjPath,
+      `Subpath imports resolution will be implemented before native ESM support is complete.`,
+    ));
+  }
 
   // ── 2. Resolve entrypoint ──
   let entryPath: string;
@@ -442,10 +482,28 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     entryPath = path.isAbsolute(options.entry)
       ? options.entry
       : path.resolve(projectRoot, options.entry);
+  } else if (rootPj?.exports) {
+    // If the project has "exports", use it to find the entry
+    // For now, only handle the simple case: exports = "./file.js" or exports.".".default
+    const entryFromExports = resolveExportsEntry(rootPj.exports, projectRoot);
+    if (entryFromExports) {
+      entryPath = entryFromExports;
+    } else if (rootPj?.main) {
+      entryPath = path.resolve(projectRoot, rootPj.main);
+      warnings.push(diag(
+        'warning',
+        'exports-not-resolved',
+        `Project has an "exports" field but Hakobu could not extract the entry from it. ` +
+        `Falling back to "main": "${rootPj.main}".`,
+        rootPjPath,
+        `For complex exports maps, specify the entry explicitly with --entry.`,
+      ));
+    } else {
+      entryPath = path.resolve(projectRoot, 'index.js');
+    }
   } else if (rootPj?.main) {
     entryPath = path.resolve(projectRoot, rootPj.main);
   } else {
-    // Default: index.js
     entryPath = path.resolve(projectRoot, 'index.js');
   }
 
@@ -482,14 +540,14 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     if (visited.has(realPath)) return null;
     visited.add(realPath);
 
-    // Skip files outside the project root (shouldn't happen, but safety)
     if (!realPath.startsWith(projectRoot)) {
-      warnings.push({
-        category: 'unsupported-feature',
-        message: `File outside project root: ${realPath}`,
-        file: realPath,
-        suggestion: 'Ensure all dependencies are installed within the project',
-      });
+      warnings.push(diag(
+        'warning',
+        'unsupported-feature',
+        `File outside project root: ${realPath}`,
+        realPath,
+        'Ensure all dependencies are installed within the project.',
+      ));
       return null;
     }
 
@@ -513,7 +571,6 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
 
     files[snapshotPath] = file;
 
-    // Index package.json files for resolution metadata
     if (kind === 'package-json') {
       const pjData = readPackageJson(realPath);
       if (pjData) {
@@ -530,12 +587,11 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
       }
     }
 
-    // Track native addons
     if (kind === 'native-addon') {
       nativeAddons.push({
         snapshotPath,
         absolutePath: realPath,
-        contentHash: '', // Computed during snapshot assembly, not analysis
+        contentHash: '',
         targetPlatform: null,
         targetArch: null,
       });
@@ -547,47 +603,58 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   function walkFile(absolutePath: string) {
     const file = addFile(absolutePath);
     if (!file) return;
-
-    // Only walk dependencies of scripts
     if (file.kind !== 'script') return;
 
-    // Also include the package.json that governs this file
     const pjBoundary = findPackageBoundary(absolutePath, projectRoot);
     if (pjBoundary && !visited.has(fs.realpathSync(pjBoundary))) {
       addFile(pjBoundary);
     }
 
-    // Extract and resolve dependencies
-    const specifiers = extractDependencies(absolutePath, file.format!);
+    const deps = extractDependencies(absolutePath, file.format!);
 
-    for (const spec of specifiers) {
-      const resolved = resolveSpecifier(spec, absolutePath, warnings);
+    for (const dep of deps) {
+      // ── Dynamic specifier diagnostics ──
+      if (dep.dynamic) {
+        const category: WarningCategory = dep.kind === 'require' ? 'dynamic-require' : 'dynamic-import';
+        warnings.push(diag(
+          'warning',
+          category,
+          `${dep.kind}() with non-literal argument in ${path.basename(absolutePath)}. ` +
+          `Hakobu cannot trace dynamic ${dep.kind === 'require' ? 'require' : 'import'} targets statically.`,
+          absolutePath,
+          dep.kind === 'require'
+            ? `If the required module is known, add it to the assets or scripts list explicitly.`
+            : `If the imported module is known, add it as a static import or to the scripts list.`,
+        ));
+        continue;
+      }
+
+      const resolved = resolveSpecifier(dep.specifier, absolutePath, warnings);
       if (resolved) {
         walkFile(resolved);
       }
     }
   }
 
-  // Start from entrypoint
   walkFile(entryPath);
 
-  // Always include the root package.json if it exists
   if (rootPj && fs.existsSync(rootPjPath)) {
     addFile(rootPjPath);
   }
 
-  // ── 4. Add user-specified assets ──
-  // (Asset glob resolution is a future enhancement — placeholder for now)
+  // ── 4. Asset glob placeholder ──
   if (options.assets && options.assets.length > 0) {
-    warnings.push({
-      category: 'unsupported-feature',
-      message: 'Asset glob patterns are not yet resolved by the analyzer',
-      file: null,
-      suggestion: 'Assets will be supported in a future release',
-    });
+    warnings.push(diag(
+      'info',
+      'unsupported-feature',
+      'Asset glob patterns are not yet resolved by the analyzer.',
+      null,
+      'Asset glob resolution will be supported in a future release. ' +
+      'Files matched by these globs are not included in the manifest.',
+    ));
   }
 
-  // ── 5. Build externals list ──
+  // ── 5. Build externals ──
   const externals: ExternalArtifact[] = (options.externals ?? []).map((pattern) => ({
     name: pattern,
     pattern,
@@ -595,7 +662,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   }));
 
   // ── 6. Assemble manifest ──
-  const manifest: PackagingManifest = {
+  return {
     projectRoot,
     appId,
     entry,
@@ -609,6 +676,47 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     runtimeFlags: options.runtimeFlags ?? [],
     warnings,
   };
+}
 
-  return manifest;
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Try to extract a single entry file from a package.json "exports" field.
+ * Handles the simplest common cases only:
+ *   exports: "./file.js"
+ *   exports: { ".": "./file.js" }
+ *   exports: { ".": { "default": "./file.js" } }
+ *   exports: { ".": { "import": "./file.js" } }
+ */
+function resolveExportsEntry(exports: unknown, projectRoot: string): string | null {
+  if (typeof exports === 'string') {
+    const resolved = path.resolve(projectRoot, exports);
+    return fs.existsSync(resolved) ? resolved : null;
+  }
+
+  if (typeof exports === 'object' && exports !== null && !Array.isArray(exports)) {
+    const map = exports as Record<string, unknown>;
+
+    // { ".": ... }
+    const dotEntry = map['.'];
+    if (typeof dotEntry === 'string') {
+      const resolved = path.resolve(projectRoot, dotEntry);
+      return fs.existsSync(resolved) ? resolved : null;
+    }
+
+    // { ".": { "import": "...", "default": "..." } }
+    if (typeof dotEntry === 'object' && dotEntry !== null) {
+      const conditions = dotEntry as Record<string, unknown>;
+      for (const key of ['import', 'default', 'node', 'require']) {
+        if (typeof conditions[key] === 'string') {
+          const resolved = path.resolve(projectRoot, conditions[key] as string);
+          if (fs.existsSync(resolved)) return resolved;
+        }
+      }
+    }
+  }
+
+  return null;
 }

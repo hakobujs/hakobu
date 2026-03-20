@@ -53,7 +53,7 @@
     - _Requirements: 3.1, 4.1, 9.2, 14.2_
     - **Output:** `packages/hakobu/lib/analyzer.ts`
 
-  - [ ] 4.3 Add diagnostics for unsupported packaging patterns
+  - [x] 4.3 Add diagnostics for unsupported packaging patterns
     - Fail fast for unsupported dynamic resolution or addon usage
     - Attach remediation suggestions to analysis errors
     - _Requirements: 6.5, 7.4, 9.3_

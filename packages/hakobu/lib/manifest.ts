@@ -352,15 +352,29 @@ export interface PackagingManifest {
 // Diagnostics
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Diagnostic severity:
+ * - error:   blocks correct packaging. The packaged app will not work.
+ * - warning: may cause incorrect behavior. Should be reviewed.
+ * - info:    informational. No action required but useful for debugging.
+ */
+export type DiagnosticSeverity = 'error' | 'warning' | 'info';
+
 export type WarningCategory =
+  | 'exports-not-resolved'
+  | 'imports-not-resolved'
   | 'unresolved-import'
   | 'dynamic-require'
+  | 'dynamic-import'
   | 'missing-asset'
   | 'addon-platform-mismatch'
   | 'deprecated-config'
-  | 'unsupported-feature';
+  | 'legacy-pkg-config'
+  | 'unsupported-feature'
+  | 'esm-resolution-fallback';
 
 export interface ManifestWarning {
+  severity: DiagnosticSeverity;
   category: WarningCategory;
   message: string;
   /** File that triggered the warning, if applicable. */
