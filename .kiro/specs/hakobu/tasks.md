@@ -78,10 +78,11 @@
     - **Output:** `packages/hakobu/lib/snapshot-path.ts` (49 tests passing)
 
 - [ ] 6. Implement native ESM runtime support
-  - [ ] 6.1 Build the ESM bootstrap and entry loader
+  - [x] 6.1 Build the ESM bootstrap and entry loader
     - Start ES module entrypoints directly from the packaged runtime
     - Register Node 24 module hooks before loading the user entrypoint
     - _Requirements: 3.1, 3.2, 3.4_
+    - **Output:** `packages/hakobu/lib/bootstrap.ts`
 
   - [ ] 6.2 Implement packaged ESM resolution
     - Resolve static and dynamic imports from the snapshot
