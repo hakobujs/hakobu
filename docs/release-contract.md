@@ -176,8 +176,10 @@ sha256sum -c CHECKSUMS.sha256
 ### Expected Hashes in Code
 
 `@hakobu/hakobu-fetch` embeds expected SHA-256 hashes in
-`lib/expected-shas.json`, keyed by artifact name (without the `hakobu-base-`
-prefix for internal resolution, using the full name for display).
+`lib/expected-shas.json`, keyed by the release artifact name (e.g.,
+`hakobu-base-v24.14.0-linux-x64`). These keys match the filenames
+published in GitHub Releases and the `remotePlace().name` used for
+download.
 
 Before the first published Hakobu base-binary release for a Node patch line,
 this file may be empty. In that state, `hakobu-fetch` skips remote fetch for

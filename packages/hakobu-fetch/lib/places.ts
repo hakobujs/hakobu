@@ -8,7 +8,7 @@ const IGNORE_TAG = Boolean(process.env.HAKOBU_IGNORE_TAG);
 export const cachePath =
   HAKOBU_CACHE_PATH || path.join(os.homedir(), '.hakobu', 'cache');
 
-function tagFromVersion(version: string) {
+function cacheTagFromVersion(version: string) {
   const mj = major(version);
   const mn = minor(version);
 
@@ -46,7 +46,7 @@ export function localPlace({
   } else {
     binDir = IGNORE_TAG
       ? path.join(cachePath)
-      : path.join(cachePath, tagFromVersion(version));
+      : path.join(cachePath, cacheTagFromVersion(version));
   }
 
   return path.resolve(
@@ -60,14 +60,19 @@ export interface Remote {
   name: string;
 }
 
+// Remote artifact naming follows docs/release-contract.md:
+//   tag:  bases/node-v{nodeVersion}    (e.g., bases/node-v24.14.0)
+//   name: hakobu-base-v{nodeVersion}-{platform}-{arch}
+//
+// Download URL:
+//   https://github.com/hakobujs/hakobu/releases/download/{tag}/{name}
 export function remotePlace({
-  version,
   nodeVersion,
   platform,
   arch,
 }: PlaceOptions): Remote {
   return {
-    tag: tagFromVersion(version),
-    name: `node-${nodeVersion}-${platform}-${arch}`,
+    tag: `bases/node-${nodeVersion}`,
+    name: `hakobu-base-${nodeVersion}-${platform}-${arch}`,
   };
 }
