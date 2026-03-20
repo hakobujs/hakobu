@@ -21,7 +21,9 @@
  */
 
 import fs from 'fs';
+import Module from 'module';
 import { SnapshotFS, isSnapshotPath, toNative } from './snapshot-fs';
+import { toCanonical } from './snapshot-path';
 
 // ─────────────────────────────────────────────────────────────────────
 // Path coercion (Node passes string | Buffer | URL)
@@ -271,6 +273,48 @@ export function patchFS(sfs: SnapshotFS): () => void {
     return (orig.copyFileSync as any).call(fs, src, dest, ...rest);
   };
 
+  // ── CJS Module resolution patch ──
+  // Node's require() uses Module._resolveFilename which calls internal
+  // C++ file operations that bypass our fs patches. We patch
+  // _resolveFilename to recognize snapshot paths directly.
+
+  const origResolveFilename = (Module as any)._resolveFilename;
+
+  (Module as any)._resolveFilename = function _resolveFilename(
+    request: string,
+    parent: any,
+    isMain: boolean,
+    options: any,
+  ) {
+    if (isSnapshotArg(request)) {
+      const p = coercePath(request)!;
+      if (sfs.existsSync(p)) {
+        return p; // snapshot path exists — return it directly
+      }
+    }
+    return origResolveFilename.call(this, request, parent, isMain, options);
+  };
+
+  // Patch Module._compile to read snapshot source via SnapshotFS
+  // when the filename is a snapshot path.
+  const origCompile = (Module as any).prototype._compile;
+
+  (Module as any).prototype._compile = function _compile(
+    content: string,
+    filename: string,
+  ) {
+    if (isSnapshotArg(filename)) {
+      // Read the real content from snapshot (the CJS loader may have
+      // passed empty or wrong content since the file doesn't exist
+      // on the real filesystem).
+      const p = coercePath(filename)!;
+      if (sfs.existsSync(p) && sfs.statSync(p).isFile()) {
+        content = sfs.readFileSync(p).toString('utf8');
+      }
+    }
+    return origCompile.call(this, content, filename);
+  };
+
   // ── Restore function ──
 
   return function unpatchFS() {
@@ -289,5 +333,7 @@ export function patchFS(sfs: SnapshotFS): () => void {
     (fs as any).renameSync = orig.renameSync;
     (fs as any).chmodSync = orig.chmodSync;
     (fs as any).copyFileSync = orig.copyFileSync;
+    (Module as any)._resolveFilename = origResolveFilename;
+    (Module as any).prototype._compile = origCompile;
   };
 }

@@ -88,7 +88,7 @@
     - Resolve static and dynamic imports from the snapshot
     - Apply `type`, `exports`, and `imports` rules using packaged metadata
     - _Requirements: 3.2, 3.3, 5.2, 12.2_
-    - **Output:** `packages/hakobu/lib/esm-resolver.ts`
+    - **Output:** `packages/hakobu/lib/esm-resolver.ts`, `packages/hakobu/lib/esm-hooks.ts`
 
   - [ ] 6.3 Implement `import.meta.url` and source-map correctness
     - Return canonical packaged `file:` URLs for ESM modules
