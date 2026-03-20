@@ -73,7 +73,7 @@ and architecture, per `docs/target-policy.md`:
 | Target | Verification Method | Environment |
 | --- | --- | --- |
 | `linux-x64` | native | ubuntu-latest runner |
-| `linux-arm64` | arm64 container via QEMU | `ubuntu:jammy` arm64 container on x64 runner |
+| `linux-arm64` | native | ubuntu-24.04-arm runner (native arm64) |
 | `win-x64` | native | windows-latest runner |
 | `macos-arm64` | native | macos-latest runner |
 | `macos-x64` | Rosetta | `arch -x86_64` on macos-latest arm64 runner |
@@ -109,7 +109,6 @@ and will be renamed to `HAKOBU_EXECPATH` when the patches are updated
 
 ## Alpha Limitations
 
-- `linux-arm64` verification uses QEMU emulation, not native arm64
-  hardware. This is acceptable for alpha per `docs/target-policy.md`
-  but must be upgraded to native verification by beta.
 - `linuxstatic-arm64` is excluded from alpha due to a toolchain blocker.
+- `macos-x64` uses Rosetta verification (cross-compiled on arm64 runner).
+  A future follow-up could use an Intel-native runner if available.

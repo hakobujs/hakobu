@@ -48,41 +48,21 @@ Targets are classified into three tiers that determine release expectations.
 Tier 1 targets **must pass all tests** before any release is published. A
 failure on any Tier 1 target blocks the release.
 
-| Target         | Build Strategy | Verification | Runner                |
-| -------------- | -------------- | ------------ | --------------------- |
-| `linux-x64`    | native         | native       | `ubuntu-latest`       |
-| `linux-arm64`  | cross-build    | see below    | `ubuntu-latest`       |
-| `win-x64`      | native         | native       | `windows-latest`      |
-| `macos-arm64`  | native         | native       | `macos-latest`        |
+| Target         | Build Strategy    | Verification | Runner                |
+| -------------- | ----------------- | ------------ | --------------------- |
+| `linux-x64`    | Docker (OL8)      | native       | `ubuntu-latest`       |
+| `linux-arm64`  | Docker (OL8)      | native       | `ubuntu-24.04-arm`    |
+| `win-x64`      | native            | native       | `windows-latest`      |
+| `macos-arm64`  | native            | native       | `macos-latest`        |
 
 Rationale: these four targets cover the primary server, desktop, and CI
 deployment surfaces. `linux-arm64` is Tier 1 because ARM servers (AWS
 Graviton, Ampere) are now mainstream for Node workloads.
 
-#### `linux-arm64` Verification Escalation
-
-`linux-arm64` is Tier 1 but does not have a native GitHub-hosted runner on
-the free plan. Verification requirements escalate by release stage:
-
-| Stage | Verification Method     | Acceptable?                                |
-| ----- | ----------------------- | ------------------------------------------ |
-| Alpha | QEMU user-mode on x64   | yes — sufficient for smoke tests           |
-| Beta  | native arm64 runner     | required — QEMU alone is not sufficient    |
-| v1 GA | native arm64 runner     | required                                   |
-
-At **alpha**, QEMU user-mode emulation on `ubuntu-latest` is acceptable for
-running the version-check and basic execution smoke tests. This lets the
-project ship early without blocking on runner infrastructure.
-
-By **beta**, native arm64 verification must be in place. This can be achieved
-through:
-- a GitHub-hosted arm64 runner (available on paid plans)
-- a self-hosted arm64 runner
-- a community-contributed verification step
-
-If native arm64 verification cannot be established by beta, `linux-arm64`
-must be demoted to Tier 2 until it can. The demotion must be noted in the
-beta release notes.
+Both Linux targets use Docker (OracleLinux 8) intentionally — the Docker
+base image controls the output binary's glibc version (2.28) for broad
+compatibility. `linux-arm64` runs on a native arm64 GitHub-hosted runner
+(`ubuntu-24.04-arm`), so both compilation and verification are native.
 
 ### Tier 2 — Supported, Best-Effort
 
