@@ -204,7 +204,9 @@ jobs:
 
     name: "${{ matrix.target }} (Tier ${{ matrix.tier }})"
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Docker-in-Docker Node compilation is slower than native builds.
+    # OracleLinux x64 takes ~1h40m, Alpine x64 can take ~3-4h.
+    timeout-minutes: 300
 
     steps:
       - uses: actions/checkout@v4
@@ -302,7 +304,8 @@ jobs:
   build-linux-cross:
     name: "linux-arm64 (Tier 1)"
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # Cross-compilation inside Docker is the slowest build path (~3-4h).
+    timeout-minutes: 300
 
     steps:
       - uses: actions/checkout@v4
