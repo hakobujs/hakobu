@@ -42,7 +42,8 @@ COPY . ./
 # Production deps only (see Dockerfile.linux for rationale).
 RUN npm install --production --ignore-scripts
 
-RUN node lib-es5/bin.js --arch $HAKOBU_FETCH_OPTION_a --node-range $HAKOBU_FETCH_OPTION_n --platform $HAKOBU_FETCH_OPTION_p --output dist
+# --force-build ensures CI always compiles from source.
+RUN node lib-es5/bin.js --arch $HAKOBU_FETCH_OPTION_a --node-range $HAKOBU_FETCH_OPTION_n --platform $HAKOBU_FETCH_OPTION_p --force-build --output dist
 
 FROM scratch
 COPY --from=build /root/hakobu-fetch/dist /

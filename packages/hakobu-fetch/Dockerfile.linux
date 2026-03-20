@@ -38,8 +38,10 @@ ARG HAKOBU_FETCH_OPTION_n
 # + compiler toolchain.
 RUN npm install --production --ignore-scripts
 
+# --force-build ensures CI always compiles from source rather than
+# fetching a pre-built binary from the GitHub Release.
 RUN source /opt/rh/gcc-toolset-13/enable && \
-    node lib-es5/bin.js --node-range $HAKOBU_FETCH_OPTION_n --output dist
+    node lib-es5/bin.js --node-range $HAKOBU_FETCH_OPTION_n --force-build --output dist
 
 FROM scratch
 COPY --from=build /root/hakobu-fetch/dist /
