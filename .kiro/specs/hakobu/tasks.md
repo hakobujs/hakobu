@@ -22,21 +22,23 @@
     - _Requirements: 2.1, 11.2, 11.3, 13.2_
     - **Output:** `docs/release-contract.md`
 
-- [ ] 3. Bring `hakobu-fetch` to Node 24
+- [x] 3. Bring `hakobu-fetch` to Node 24
   - [x] 3.1 Rebase the patched runtime build pipeline onto Node 24.x
     - Port inherited `pkg-fetch` build logic and patch application to Node 24
     - Separate platform-independent and platform-specific patch sets
     - _Requirements: 2.1, 2.3, 13.2_
 
-  - [ ] 3.2 Build patched Node 24 base binaries for the initial matrix
+  - [x] 3.2 Build patched Node 24 base binaries for the initial matrix
     - Produce reproducible build scripts for Linux, macOS, and Windows targets
     - Verify executables report the expected Node 24 version line
     - _Requirements: 2.1, 2.2, 10.1, 11.2_
+    - **Output:** CI run `23326898234` — 6/6 alpha targets green
 
-  - [ ] 3.3 Add automated validation for patched bases
+  - [x] 3.3 Add automated validation for patched bases
     - Run smoke tests against each built base before publishing
     - Record upstream Node version and patch provenance in release metadata
     - _Requirements: 2.2, 2.4, 11.3, 13.2_
+    - **Output:** `PROVENANCE.json`, `expected-shas.json`, `docs/verification-contract.md`
 
 - [ ] 4. Refactor the package manifest and analysis pipeline
   - [ ] 4.1 Design the normalized Hakobu packaging manifest

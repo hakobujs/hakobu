@@ -49,4 +49,6 @@ pnpm test
 - Uses a patched Node binary + snapshot filesystem model (not Node SEA)
 - Windows Playwright/Camoufox with custom stdio is a release-gate workload
 - Design docs and requirements live in `.kiro/specs/hakobu/`
-- Target support tiers and release rules live in `docs/`
+- Target support tiers, release contract, and verification rules live in `docs/`
+- Base binary provenance is recorded in `packages/hakobu-fetch/PROVENANCE.json`
+- Expected checksums for trusted fetch are in `packages/hakobu-fetch/lib/expected-shas.json`

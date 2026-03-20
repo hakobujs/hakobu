@@ -1,0 +1,79 @@
+{
+  "hakobuFetchVersion": "0.1.0",
+  "nodeVersion": "24.14.0",
+  "nodeSourceUrl": "https://nodejs.org/dist/v24.14.0/node-v24.14.0.tar.gz",
+  "nodeSourceSha256": "852c73dd5b6ba15b231d036da6312dbcdabd6295adc3940586f3187b77731cf3",
+  "patchFiles": [
+    "node.v24.14.0.cpp.patch"
+  ],
+  "patchSetSha256": "84f8762cf0dd5b047e0ece2601c483d7b00ace928dafba8d183fd71e6d076461",
+  "buildDate": "2026-03-20T02:46:38Z",
+  "ciRunId": "23326898234",
+  "ciRunUrl": "https://github.com/hakobujs/hakobu/actions/runs/23326898234",
+  "ciWorkflow": ".github/workflows/build-bases.yml",
+  "ciCommit": "2d31c5a",
+  "ltoEnabled": false,
+  "targets": [
+    {
+      "name": "hakobu-base-v24.14.0-linux-x64",
+      "platform": "linux",
+      "arch": "x64",
+      "tier": 1,
+      "buildStrategy": "docker-native",
+      "buildEnvironment": "OracleLinux 8, gcc-toolset-13",
+      "verificationMethod": "native",
+      "sha256": "c5968b5a42be76cbc6e8f052e948d3d96be93b35fdbde21ffc7ec3e27e2b9b83"
+    },
+    {
+      "name": "hakobu-base-v24.14.0-linux-arm64",
+      "platform": "linux",
+      "arch": "arm64",
+      "tier": 1,
+      "buildStrategy": "docker-cross-compile",
+      "buildEnvironment": "Ubuntu Jammy, gcc-12-aarch64-linux-gnu",
+      "verificationMethod": "arm64-container-qemu",
+      "verificationNote": "Alpha-acceptable per docs/target-policy.md. Native arm64 required by beta.",
+      "sha256": "ff61733560434a2e0afa8164a989720271a43ffab8aed121b2cfc7ad8b324e0e"
+    },
+    {
+      "name": "hakobu-base-v24.14.0-win-x64",
+      "platform": "win",
+      "arch": "x64",
+      "tier": 1,
+      "buildStrategy": "native",
+      "buildEnvironment": "windows-latest, VS 2022",
+      "verificationMethod": "native",
+      "sha256": "d8dbe3c91a57414e61df284dae69416c56b3cd6f6784e886ccba66df55d8110e"
+    },
+    {
+      "name": "hakobu-base-v24.14.0-macos-arm64",
+      "platform": "macos",
+      "arch": "arm64",
+      "tier": 1,
+      "buildStrategy": "native",
+      "buildEnvironment": "macos-latest, Apple Clang",
+      "verificationMethod": "native",
+      "sha256": "ef50fcb313160f18f622d59a664ed5688249756322dbdd0e6a60096a641e9d0f"
+    },
+    {
+      "name": "hakobu-base-v24.14.0-macos-x64",
+      "platform": "macos",
+      "arch": "x64",
+      "tier": 2,
+      "buildStrategy": "cross-compile-rosetta",
+      "buildEnvironment": "macos-latest (arm64), -arch x86_64",
+      "verificationMethod": "rosetta",
+      "sha256": "0679180f74a3d870431170728d6edef864a436524585dcb394db9cfc0b272529"
+    },
+    {
+      "name": "hakobu-base-v24.14.0-linuxstatic-x64",
+      "platform": "linuxstatic",
+      "arch": "x64",
+      "tier": 2,
+      "buildStrategy": "docker-native",
+      "buildEnvironment": "Alpine 3.22, musl, fully-static",
+      "verificationMethod": "native",
+      "sha256": "1173551ddabc898d9c9c7a1d9eb1b83b4c66661b2669e1f3ea19982517cc0211"
+    }
+  ]
+}
