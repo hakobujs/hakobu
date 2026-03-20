@@ -58,7 +58,7 @@
     - Attach remediation suggestions to analysis errors
     - _Requirements: 6.5, 7.4, 9.3_
 
-- [ ] 5. Rebuild the snapshot filesystem layer for Node 24
+- [x] 5. Rebuild the snapshot filesystem layer for Node 24
   - [x] 5.1 Define the new snapshot index format
     - Include offsets, hashes, modes, package boundaries, and file kinds
     - Preserve deterministic ordering for reproducible builds
@@ -71,10 +71,11 @@
     - _Requirements: 5.1, 5.3, 5.4, 5.5_
     - **Output:** `packages/hakobu/lib/snapshot-fs.ts`, `packages/hakobu/lib/snapshot-fs-patch.ts`
 
-  - [ ] 5.3 Validate path canonicalization across platforms
+  - [x] 5.3 Validate path canonicalization across platforms
     - Ensure POSIX and Windows snapshot roots map correctly to runtime paths
     - Add executable tests for path-sensitive modules and stack traces
     - _Requirements: 5.2, 5.4, 10.3, 12.1_
+    - **Output:** `packages/hakobu/lib/snapshot-path.ts` (49 tests passing)
 
 - [ ] 6. Implement native ESM runtime support
   - [ ] 6.1 Build the ESM bootstrap and entry loader

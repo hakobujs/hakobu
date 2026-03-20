@@ -33,71 +33,9 @@ import type {
 
 import type { ModuleFormat, FileKind } from './manifest';
 
-// ─────────────────────────────────────────────────────────────────────
-// Path normalization
-// ─────────────────────────────────────────────────────────────────────
-
-const IS_WIN = process.platform === 'win32';
-const SNAPSHOT_PREFIX_POSIX = '/snapshot/';
-const SNAPSHOT_PREFIX_WIN = 'C:\\snapshot\\';
-const SNAPSHOT_PREFIX_WIN_LOWER = 'c:\\snapshot\\';
-
-/**
- * Check if a path is inside the snapshot filesystem.
- * Accepts platform-native paths.
- */
-export function isSnapshotPath(p: string): boolean {
-  if (IS_WIN) {
-    const lower = p.toLowerCase();
-    return lower.startsWith(SNAPSHOT_PREFIX_WIN_LOWER) || lower.startsWith('c:/snapshot/');
-  }
-  return p.startsWith(SNAPSHOT_PREFIX_POSIX) || p === '/snapshot';
-}
-
-/**
- * Convert a platform-native snapshot path to POSIX form for index lookup.
- * Input must be a snapshot path (checked by isSnapshotPath).
- */
-function toPosix(nativePath: string): string {
-  if (IS_WIN) {
-    // C:\snapshot\app\file.js → /snapshot/app/file.js
-    let p = nativePath.replace(/\\/g, '/');
-    if (/^[A-Za-z]:/.test(p)) {
-      p = p.slice(2); // strip drive letter
-    }
-    return p;
-  }
-  return nativePath;
-}
-
-/**
- * Convert a POSIX snapshot path to platform-native form.
- */
-export function toNative(posixPath: string): string {
-  if (IS_WIN) {
-    return 'C:' + posixPath.replace(/\//g, '\\');
-  }
-  return posixPath;
-}
-
-/**
- * Normalize a path: resolve . and .. segments, normalize separators.
- */
-function normalizePosix(p: string): string {
-  const parts = p.split('/');
-  const result: string[] = [];
-
-  for (const part of parts) {
-    if (part === '.' || part === '') continue;
-    if (part === '..') {
-      result.pop();
-    } else {
-      result.push(part);
-    }
-  }
-
-  return '/' + result.join('/');
-}
+// Re-export path utilities from the canonical module
+export { isSnapshotPath, toNative, toCanonical, toFileUrl } from './snapshot-path';
+import { isSnapshotPath, toCanonical, toNative } from './snapshot-path';
 
 // ─────────────────────────────────────────────────────────────────────
 // Error factories (match Node's error codes)
@@ -229,7 +167,7 @@ export class SnapshotFS {
 
   /** Check if a path exists in the snapshot (file or directory). */
   existsSync(nativePath: string): boolean {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
     return this.entryMap.has(p) || p in this.index.directories;
   }
 
@@ -237,7 +175,7 @@ export class SnapshotFS {
 
   /** Get file/directory metadata. Throws ENOENT if not found. */
   statSync(nativePath: string): SnapshotStat {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
 
     const entry = this.entryMap.get(p);
     if (entry) return fileStat(entry.size);
@@ -259,7 +197,7 @@ export class SnapshotFS {
    * Returns a Buffer. Throws ENOENT or EISDIR.
    */
   readFileSync(nativePath: string): Buffer {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
 
     if (p in this.index.directories) {
       throw eisdir('read', nativePath);
@@ -278,7 +216,7 @@ export class SnapshotFS {
    * Throws ENOENT or ENOTDIR.
    */
   readdirSync(nativePath: string): string[] {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
 
     // Check if it's a file, not a directory
     if (this.entryMap.has(p)) {
@@ -299,7 +237,7 @@ export class SnapshotFS {
    * Returns the platform-native normalized path.
    */
   realpathSync(nativePath: string): string {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
 
     if (!this.entryMap.has(p) && !(p in this.index.directories)) {
       throw enoent('realpath', nativePath);
@@ -330,7 +268,7 @@ export class SnapshotFS {
    * Returns null if the file is not a script or not found.
    */
   getModuleFormat(nativePath: string): ModuleFormat | null {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
     const entry = this.entryMap.get(p);
     return entry?.format ?? null;
   }
@@ -340,7 +278,7 @@ export class SnapshotFS {
    * Returns null if not found.
    */
   getFileKind(nativePath: string): FileKind | null {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
     const entry = this.entryMap.get(p);
     return entry?.kind ?? null;
   }
@@ -350,7 +288,7 @@ export class SnapshotFS {
    * Returns the SnapshotPackageBoundary or null.
    */
   getPackageBoundary(nativePath: string): SnapshotPackageBoundary | null {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
     const entry = this.entryMap.get(p);
     if (!entry?.packageBoundary) return null;
     return this.index.packages[entry.packageBoundary] ?? null;
@@ -360,7 +298,7 @@ export class SnapshotFS {
    * Look up a package boundary by its package.json snapshot path.
    */
   getPackage(packageJsonPath: string): SnapshotPackageBoundary | null {
-    const p = normalizePosix(toPosix(packageJsonPath));
+    const p = toCanonical(packageJsonPath);
     return this.index.packages[p] ?? null;
   }
 
@@ -368,7 +306,7 @@ export class SnapshotFS {
 
   /** Get the snapshot entry for a path. */
   getEntry(nativePath: string): SnapshotEntry | null {
-    const p = normalizePosix(toPosix(nativePath));
+    const p = toCanonical(nativePath);
     return this.entryMap.get(p) ?? null;
   }
 
