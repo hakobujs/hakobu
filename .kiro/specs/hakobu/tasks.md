@@ -84,10 +84,11 @@
     - _Requirements: 3.1, 3.2, 3.4_
     - **Output:** `packages/hakobu/lib/bootstrap.ts`
 
-  - [ ] 6.2 Implement packaged ESM resolution
+  - [x] 6.2 Implement packaged ESM resolution
     - Resolve static and dynamic imports from the snapshot
     - Apply `type`, `exports`, and `imports` rules using packaged metadata
     - _Requirements: 3.2, 3.3, 5.2, 12.2_
+    - **Output:** `packages/hakobu/lib/esm-resolver.ts`
 
   - [ ] 6.3 Implement `import.meta.url` and source-map correctness
     - Return canonical packaged `file:` URLs for ESM modules
