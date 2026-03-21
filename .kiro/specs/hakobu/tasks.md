@@ -100,13 +100,13 @@
     - Verify mixed graphs against unpackaged execution results
     - _Requirements: 3.5, 4.3, 12.2_
 
-- [ ] 7. Preserve and modernize CommonJS behavior
-  - [ ] 7.1 Port CommonJS entry bootstrap and require resolution
+- [x] 7. Preserve and modernize CommonJS behavior
+  - [x] 7.1 Port CommonJS entry bootstrap and require resolution
     - Keep CommonJS entrypoints working on the Node 24 runtime
     - Support `require`, `require.resolve`, and JSON loading from snapshot
     - _Requirements: 4.1, 4.2_
 
-  - [ ] 7.2 Align CommonJS behavior with Node 24 where legacy `pkg` differed
+  - [x] 7.2 Align CommonJS behavior with Node 24 where legacy `pkg` differed
     - Identify inherited edge cases that conflict with Node 24
     - Document and test intentional compatibility changes
     - _Requirements: 4.3, 4.4, 14.2_

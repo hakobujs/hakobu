@@ -52,7 +52,7 @@ export async function bootstrap(
   if (format === 'esm') {
     return bootstrapESM(sfs, entrySnapshotPath, unpatch, options?.dryRun ?? false);
   } else {
-    return bootstrapCJS(entrySnapshotPath, unpatch, options?.dryRun ?? false);
+    return bootstrapCJS(sfs, entrySnapshotPath, unpatch, options?.dryRun ?? false);
   }
 }
 
@@ -114,6 +114,7 @@ async function bootstrapESM(
 // ─────────────────────────────────────────────────────────────────────
 
 async function bootstrapCJS(
+  sfs: SnapshotFS,
   entrySnapshotPath: string,
   unpatch: () => void,
   dryRun: boolean,
@@ -121,6 +122,9 @@ async function bootstrapCJS(
   const nativePath = toNative(entrySnapshotPath);
 
   if (!dryRun) {
+    // CJS entry is loaded directly via require(). The patched
+    // Module._resolveFilename + Module._compile handle snapshot
+    // resolution and source loading. No preloading needed.
     require(nativePath);
   }
 
@@ -181,42 +185,33 @@ function buildHookTransferData(sfs: SnapshotFS): HookTransferData {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Pre-populate Node's CJS module cache for all CJS/JSON files in the
- * snapshot. This ensures that require() from within hooks-loaded CJS
- * modules finds the module in cache without trying to read from disk.
+ * Pre-populate Node's CJS module cache for JSON/package.json files in
+ * the snapshot. CJS scripts are NOT preloaded — they're loaded lazily
+ * when require() is called, using the _resolveFilename + _compile
+ * patches on the main thread.
+ *
+ * JSON files are preloaded eagerly because they have no side effects
+ * and are frequently needed for package resolution.
  */
 function preloadCJSModules(sfs: SnapshotFS) {
   const index = (sfs as any).index as SnapshotIndex;
 
   for (const entry of index.entries) {
-    // Only preload CJS scripts and JSON files
-    if (entry.kind !== 'script' && entry.kind !== 'json' && entry.kind !== 'package-json') continue;
-    if (entry.format === 'esm') continue; // ESM modules are handled by hooks
+    // Only preload JSON files eagerly (no side effects)
+    if (entry.kind !== 'json' && entry.kind !== 'package-json') continue;
 
     const filename = toNative(entry.path);
-
-    // Skip if already cached
     if ((Module as any)._cache[filename]) continue;
-
-    const mod = new (Module as any)(filename, null);
-    mod.filename = filename;
-    mod.paths = (Module as any)._nodeModulePaths(
-      filename.substring(0, filename.lastIndexOf('/'))
-    );
 
     try {
       const content = sfs.readFileSync(entry.path).toString('utf8');
-
-      if (entry.kind === 'json' || entry.kind === 'package-json') {
-        mod.exports = JSON.parse(content);
-      } else {
-        mod._compile(content, filename);
-      }
-
+      const mod = new (Module as any)(filename, null);
+      mod.filename = filename;
+      mod.exports = JSON.parse(content);
       mod.loaded = true;
       (Module as any)._cache[filename] = mod;
     } catch {
-      // Skip modules that fail to compile (they'll error at require time)
+      // Skip invalid JSON
     }
   }
 }

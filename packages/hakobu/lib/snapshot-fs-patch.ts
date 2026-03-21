@@ -307,48 +307,13 @@ export function patchFS(sfs: SnapshotFS): () => void {
     }
 
     if (resolved) {
-      // Ensure the module is preloaded in the CJS cache so Node's
-      // internal loader doesn't try to read from the real filesystem.
-      // This is needed because CJS require() from within hooks-loaded
-      // CJS modules goes through Module._resolveFilename but then
-      // validates file existence via internal C++ calls.
-      ensureSnapshotModuleCached(resolved, sfs);
       return resolved;
     }
 
     return origResolveFilename.call(this, request, parent, isMain, options);
   };
 
-  /**
-   * Pre-populate Node's CJS module cache for a snapshot file.
-   * This prevents the CJS loader from trying to read the file from
-   * the real filesystem after _resolveFilename returns.
-   */
-  function ensureSnapshotModuleCached(filename: string, sfsInst: SnapshotFS) {
-    if ((Module as any)._cache[filename]) return;
-
-    const mod = new (Module as any)(filename, null);
-    mod.filename = filename;
-    mod.paths = (Module as any)._nodeModulePaths(
-      filename.substring(0, filename.lastIndexOf('/'))
-    );
-
-    // Read and compile the source from the snapshot
-    if (sfsInst.existsSync(filename) && sfsInst.statSync(filename).isFile()) {
-      const content = sfsInst.readFileSync(filename).toString('utf8');
-      const ext = filename.substring(filename.lastIndexOf('.'));
-
-      if (ext === '.json') {
-        mod.exports = JSON.parse(content);
-      } else {
-        // Compile as JS (CJS)
-        mod._compile(content, filename);
-      }
-
-      mod.loaded = true;
-      (Module as any)._cache[filename] = mod;
-    }
-  }
+  // (ensureSnapshotModuleCached removed — preloading is handled by bootstrap)
 
   // Patch Module._compile to read snapshot source via SnapshotFS
   // when the filename is a snapshot path.
