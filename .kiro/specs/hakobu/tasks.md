@@ -220,20 +220,23 @@
     - _Requirements: 10.1, 10.2, 11.2, 11.3_
     - **Output:** `.github/workflows/release.yml` — tag/manual trigger, validate → fixtures → npm publish → GitHub Release
 
-- [ ] 14. Ship migration and maintenance documentation
-  - [ ] 14.1 Write migration guides from `pkg` and `yao-pkg`
+- [x] 14. Ship migration and maintenance documentation
+  - [x] 14.1 Write migration guides from `pkg` and `yao-pkg`
     - Document supported config aliases, changed defaults, and new runtime
       behaviors
     - _Requirements: 14.1, 14.2, 14.3_
+    - **Output:** `docs/migration-from-pkg.md`
 
-  - [ ] 14.2 Write runtime support and target policy docs
+  - [x] 14.2 Write runtime support and target policy docs
     - Publish the Node line support policy, target matrix, and release contract
     - _Requirements: 10.4, 11.4, 14.4_
+    - **Output:** `docs/runtime-support.md` (ties together target-policy, release-contract, and known limits)
 
-  - [ ] 14.3 Track inherited security issues and patch ownership
+  - [x] 14.3 Track inherited security issues and patch ownership
     - Create a maintenance checklist for inherited dependencies and runtime
       patches
     - _Requirements: 13.1, 13.2, 13.4_
+    - **Output:** `docs/maintenance.md`
 
 - [ ] 15. Define v1 release criteria
   - [ ] 15.1 Freeze the compatibility claim set
