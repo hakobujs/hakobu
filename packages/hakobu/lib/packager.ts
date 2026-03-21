@@ -414,11 +414,15 @@ function toNative(p) {
 }
 
 // Read package.json data for module type detection (using patched fs)
+// absPath is a host absolute path (e.g. /home/user/project/package.json or D:\\a\\project\\package.json)
+// Convert to canonical snapshot path: strip drive letter, normalize to POSIX, prepend /snapshot
 var pkgJsons = {};
 ${JSON.stringify(pkgJsonAbsPaths)}.forEach(function(absPath) {
-  var snapPath = toNative('/snapshot' + absPath.replace(/\\\\/g, '/'));
-  var canonical = toCanonical(snapPath);
-  try { pkgJsons[canonical] = JSON.parse(fs.readFileSync(snapPath, 'utf8')); } catch {}
+  var posix = absPath.replace(/\\\\/g, '/');
+  if (/^[A-Z]:/i.test(posix)) posix = posix.slice(2);
+  var canonical = '/snapshot' + posix;
+  var native = toNative(canonical);
+  try { pkgJsons[canonical] = JSON.parse(fs.readFileSync(native, 'utf8')); } catch {}
 });
 
 function isSnapshotUrl(url) {
