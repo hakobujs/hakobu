@@ -384,8 +384,6 @@ function buildEsmBridge(manifest: PackagingManifest): {
   const shimDir = path.dirname(entryAbsPath);
   const shimPath = path.join(shimDir, '__hakobu_esm_shim__.cjs');
 
-  const entrySnapshotPath = snapshotify(entryAbsPath, '/');
-
   // Collect package.json paths for module format detection at runtime
   const pkgJsonAbsPaths = Object.values(manifest.files)
     .filter(f => f.kind === 'package-json')
@@ -395,21 +393,55 @@ function buildEsmBridge(manifest: PackagingManifest): {
 // Hakobu ESM Bridge — bootstraps ESM loading from the inherited CJS VFS
 var { registerHooks } = require('node:module');
 var fs = require('fs');
+var pathMod = require('path');
+var { pathToFileURL, fileURLToPath } = require('url');
+
+// Platform detection: Windows uses C:\\snapshot, POSIX uses /snapshot
+var isWin = process.platform === 'win32';
+var snapRoot = isWin ? 'C:\\\\snapshot' : '/snapshot';
+var sep = isWin ? '\\\\' : '/';
+
+// Normalize a snapshot path to POSIX for URL/map keys (internal canonical form)
+function toCanonical(p) {
+  if (isWin && p.startsWith('C:\\\\snapshot')) return p.slice(2).replace(/\\\\/g, '/');
+  return p;
+}
+
+// Convert canonical back to native snapshot path for fs operations
+function toNative(p) {
+  if (isWin && p.startsWith('/snapshot')) return 'C:' + p.replace(/\\//g, '\\\\');
+  return p;
+}
 
 // Read package.json data for module type detection (using patched fs)
 var pkgJsons = {};
 ${JSON.stringify(pkgJsonAbsPaths)}.forEach(function(absPath) {
-  var snapPath = '/snapshot' + absPath;
-  try { pkgJsons[snapPath] = JSON.parse(fs.readFileSync(snapPath, 'utf8')); } catch {}
+  var snapPath = toNative('/snapshot' + absPath.replace(/\\\\/g, '/'));
+  var canonical = toCanonical(snapPath);
+  try { pkgJsons[canonical] = JSON.parse(fs.readFileSync(snapPath, 'utf8')); } catch {}
 });
 
-function isSnapshotPath(p) { return p.startsWith('/snapshot/'); }
+function isSnapshotUrl(url) {
+  if (url.startsWith('file:///snapshot/')) return true;
+  // Windows: file:///C:/snapshot/
+  if (isWin && /^file:\\/\\/\\/[A-Z]:\\/snapshot\\//i.test(url)) return true;
+  return false;
+}
 
-function getModuleFormat(filePath) {
-  if (filePath.endsWith('.mjs')) return 'module';
-  if (filePath.endsWith('.cjs')) return 'commonjs';
-  if (filePath.endsWith('.json')) return 'json';
-  var dir = filePath;
+function urlToCanonical(url) {
+  var p = fileURLToPath(url);
+  return toCanonical(p);
+}
+
+function canonicalToUrl(canonical) {
+  return pathToFileURL(toNative(canonical)).href;
+}
+
+function getModuleFormat(canonical) {
+  if (canonical.endsWith('.mjs')) return 'module';
+  if (canonical.endsWith('.cjs')) return 'commonjs';
+  if (canonical.endsWith('.json')) return 'json';
+  var dir = canonical;
   while (dir !== '/') {
     dir = dir.substring(0, dir.lastIndexOf('/')) || '/';
     var pkgPath = dir + '/package.json';
@@ -418,12 +450,12 @@ function getModuleFormat(filePath) {
   return 'commonjs';
 }
 
-function snapshotExists(p) {
-  try { return fs.existsSync(p); } catch { return false; }
+function snapshotExists(canonical) {
+  try { return fs.existsSync(toNative(canonical)); } catch { return false; }
 }
 
-function resolveFromSnapshot(specifier, parentPath) {
-  var parentDir = parentPath.substring(0, parentPath.lastIndexOf('/'));
+function resolveFromSnapshot(specifier, parentCanonical) {
+  var parentDir = parentCanonical.substring(0, parentCanonical.lastIndexOf('/'));
   var resolved;
   if (specifier.startsWith('./') || specifier.startsWith('../')) {
     var parts = (parentDir + '/' + specifier).split('/');
@@ -453,26 +485,27 @@ registerHooks({
     if (specifier.startsWith('bun:') || specifier.startsWith('deno:')) {
       return { url: 'data:text/javascript,export default undefined;export var Database=class{constructor(){throw new Error("' + specifier + ' not available")}};', shortCircuit: true };
     }
-    // Resolve file:// URLs to paths
-    var targetPath = null;
-    if (specifier.startsWith('file:///snapshot/')) {
-      targetPath = new URL(specifier).pathname;
-    } else if (specifier.startsWith('/snapshot/')) {
-      targetPath = specifier;
+    // Resolve file:// URLs to snapshot paths
+    if (isSnapshotUrl(specifier)) {
+      var canonical = urlToCanonical(specifier);
+      if (snapshotExists(canonical)) {
+        return { url: canonicalToUrl(canonical), shortCircuit: true };
+      }
     }
-    if (targetPath && snapshotExists(targetPath)) {
-      return { url: 'file://' + targetPath, shortCircuit: true };
+    // Absolute snapshot path (POSIX)
+    if (specifier.startsWith('/snapshot/') && snapshotExists(specifier)) {
+      return { url: canonicalToUrl(specifier), shortCircuit: true };
     }
-    // Relative imports from snapshot
-    if (context.parentURL && context.parentURL.startsWith('file:///snapshot/')) {
-      var parentPath = new URL(context.parentURL).pathname;
+    // Relative/bare imports from snapshot
+    if (context.parentURL && isSnapshotUrl(context.parentURL)) {
+      var parentCanonical = urlToCanonical(context.parentURL);
       if (specifier.startsWith('.')) {
-        var resolved = resolveFromSnapshot(specifier, parentPath);
-        if (resolved) return { url: 'file://' + resolved, shortCircuit: true };
+        var resolved = resolveFromSnapshot(specifier, parentCanonical);
+        if (resolved) return { url: canonicalToUrl(resolved), shortCircuit: true };
       }
       // #imports specifier — resolve from nearest package.json imports map
       if (specifier.startsWith('#')) {
-        var dir = parentPath;
+        var dir = parentCanonical;
         while (dir.startsWith('/snapshot/')) {
           dir = dir.substring(0, dir.lastIndexOf('/')) || '/';
           var pkgPath = dir + '/package.json';
@@ -480,7 +513,7 @@ registerHooks({
             var mapping = pkgJsons[pkgPath].imports[specifier];
             if (typeof mapping === 'string') {
               var target = resolveFromSnapshot(mapping, dir + '/dummy');
-              if (target) return { url: 'file://' + target, shortCircuit: true };
+              if (target) return { url: canonicalToUrl(target), shortCircuit: true };
             }
           }
         }
@@ -491,7 +524,7 @@ registerHooks({
         var pkgName = parts[0].startsWith('@') ? parts[0] + '/' + parts[1] : parts[0];
         var subpath = '.' + specifier.slice(pkgName.length);
         if (subpath === '.') subpath = '.';
-        var searchDir = parentPath;
+        var searchDir = parentCanonical;
         while (searchDir.startsWith('/snapshot/')) {
           searchDir = searchDir.substring(0, searchDir.lastIndexOf('/')) || '/';
           var nmPkgJson = searchDir + '/node_modules/' + pkgName + '/package.json';
@@ -500,7 +533,6 @@ registerHooks({
             var pkgDir = nmPkgJson.substring(0, nmPkgJson.lastIndexOf('/'));
             var resolved = null;
             if (pkg.exports) {
-              // Resolve from exports map
               var exportEntry = null;
               if (typeof pkg.exports === 'string') {
                 if (subpath === '.') exportEntry = pkg.exports;
@@ -516,7 +548,7 @@ registerHooks({
             } else if (subpath === '.' && pkg.main) {
               resolved = resolveFromSnapshot('./' + pkg.main, pkgDir + '/dummy');
             }
-            if (resolved) return { url: 'file://' + resolved, shortCircuit: true };
+            if (resolved) return { url: canonicalToUrl(resolved), shortCircuit: true };
           }
         }
       }
@@ -524,11 +556,11 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load: function(url, context, nextLoad) {
-    if (url.startsWith('file:///snapshot/')) {
-      var filePath = new URL(url).pathname;
+    if (isSnapshotUrl(url)) {
+      var canonical = urlToCanonical(url);
       try {
-        var source = fs.readFileSync(filePath, 'utf8');
-        var format = getModuleFormat(filePath);
+        var source = fs.readFileSync(toNative(canonical), 'utf8');
+        var format = getModuleFormat(canonical);
         return { format: format, source: source, shortCircuit: true };
       } catch {}
     }
@@ -536,8 +568,9 @@ registerHooks({
   }
 });
 
-// Import the real ESM entry
-var entryUrl = 'file://${entrySnapshotPath}';
+// Import the real ESM entry (use canonicalToUrl for cross-platform snapshot URL)
+var entryCanonical = '${snapshotify(entryAbsPath, '/').replace(/\\/g, '/')}';
+var entryUrl = canonicalToUrl(entryCanonical);
 import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });
 `;
 
