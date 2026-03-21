@@ -92,7 +92,7 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
 
   // ── 0. Bundle mode (optional pre-processing) ──
   if (options.bundle) {
-    log.info('Bundling project...');
+    log.info('Bundling project (single-chunk, __dirname shimmed)...');
 
     const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
     const adapter = getAdapter(bundlerName);

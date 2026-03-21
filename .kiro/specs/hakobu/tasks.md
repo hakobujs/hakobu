@@ -179,9 +179,10 @@
     - _Requirements: 8.1, 8.2, 8.3_
     - **Output:** `packages/hakobu/lib/bundler.ts` (RolldownAdapter), `--bundle` CLI flag
 
-  - [ ] 11.3 Document semantic differences in bundle mode
+  - [x] 11.3 Document semantic differences in bundle mode
     - Make bundle-mode caveats explicit in CLI output and docs
     - _Requirements: 8.4, 14.3_
+    - **Output:** `docs/bundle-mode.md`, improved CLI help with examples and caveat section
 
 - [ ] 12. Build the full compatibility test matrix
   - [ ] 12.1 Create executable fixtures for core runtime cases

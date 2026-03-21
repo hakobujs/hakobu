@@ -25,10 +25,21 @@ Options:
   --target <spec>     Target (e.g., node24-macos-arm64). Default: host
   --output <path>     Output executable path
   --entry <file>      Entry file (relative to project root)
-  --bundle [name]     Pre-bundle with Rolldown before packaging (for TS/monorepos)
-  --external <mod>    Keep module external when bundling (repeatable)
   --help, -h          Show this help
   --version, -v       Show version
+
+Bundle mode (optional — for TypeScript / monorepo projects):
+  --bundle [name]     Pre-bundle with Rolldown before packaging
+  --external <mod>    Keep module external when bundling (repeatable)
+
+  Without --bundle, Hakobu packages JS files directly (native mode).
+  With --bundle, Rolldown compiles TS and resolves dependencies first.
+  See docs/bundle-mode.md for semantic differences and caveats.
+
+Examples:
+  hakobu ./my-app --output ./dist/app                    Native mode
+  hakobu ./my-ts-app --bundle --output ./dist/app        Bundle mode
+  hakobu ./app --bundle --entry src/cli.ts --external electron
 `.trim();
 
 async function main() {
