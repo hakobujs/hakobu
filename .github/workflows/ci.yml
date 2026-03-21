@@ -1,0 +1,156 @@
+name: CI
+
+# Hakobu CI — fast checks on PRs, deep fixture tests on main.
+#
+# Fast checks (every PR + push to main):
+#   - install, build both packages
+#   - config normalization unit tests
+#   - fixture harness in node-only mode (no packaging, fast)
+#
+# Deep checks (push to main + manual):
+#   - full fixture matrix: package every fixture and compare
+#     packaged output against unpackaged Node output
+#   - drift detection between packaged and unpackaged behavior
+#
+# The deep checks require a base binary for the host platform.
+# The packager fetches it on first use from GitHub Releases.
+#
+# Future additions (not yet implemented):
+#   - Windows fixture validation (Task 8.4)
+#   - Release gating (Task 13.3)
+#   - Linux fixture validation on linux runner
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".kiro/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+      - ".kiro/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Fast checks — runs on every PR and push
+  # ────────────────────────────────────────────────────────────
+  fast:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Config normalization tests
+        run: node packages/hakobu/test/test-config.js
+
+      - name: Fixtures (node-only, no packaging)
+        run: node fixtures/run.js --node-only
+
+  # ────────────────────────────────────────────────────────────
+  # Deep checks — runs on main push and manual trigger
+  # Packages each fixture and compares against unpackaged output
+  # ────────────────────────────────────────────────────────────
+  fixtures-macos:
+    name: Fixtures (macOS arm64, packaged)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Full fixture matrix (node + packaged)
+        run: node fixtures/run.js
+
+  fixtures-linux:
+    name: Fixtures (Linux x64, packaged)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Full fixture matrix (node + packaged)
+        run: node fixtures/run.js
+
+  # ────────────────────────────────────────────────────────────
+  # Windows — placeholder for future Task 8.4 gate
+  # Currently just builds and runs node-only fixtures.
+  # Will be extended with packaged fixtures + Playwright/Camoufox
+  # once the Windows release gate is implemented.
+  # ────────────────────────────────────────────────────────────
+  windows-smoke:
+    name: Windows Smoke (build + node-only)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: fast
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Config tests
+        run: node packages/hakobu/test/test-config.js
+
+      - name: Fixtures (node-only)
+        run: node fixtures/run.js --node-only

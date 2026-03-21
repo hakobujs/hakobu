@@ -204,9 +204,10 @@
     - **Output:** `fixtures/run.js` comparison harness with drift detection
 
 - [ ] 13. Set up GitHub Actions CI/CD and release automation
-  - [ ] 13.1 Build CI workflows for linting, tests, and packaging fixtures
+  - [x] 13.1 Build CI workflows for linting, tests, and packaging fixtures
     - Run fast checks on pull requests and deep executable tests on main/release
     - _Requirements: 11.1, 12.1_
+    - **Output:** `.github/workflows/ci.yml` — 4 jobs (fast, fixtures-macos, fixtures-linux, windows-smoke)
 
   - [ ] 13.2 Build patched-base release workflows
     - Build and publish Node 24 patched bases with checksums and provenance
