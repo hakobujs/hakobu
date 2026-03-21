@@ -286,12 +286,27 @@ export function patchFS(sfs: SnapshotFS): () => void {
     isMain: boolean,
     options: any,
   ) {
+    // Absolute snapshot path
     if (isSnapshotArg(request)) {
       const p = coercePath(request)!;
-      if (sfs.existsSync(p)) {
-        return p; // snapshot path exists — return it directly
-      }
+      if (sfs.existsSync(p)) return p;
     }
+
+    // Relative require from within snapshot (./foo, ../bar)
+    if ((request.startsWith('.') || request.startsWith('/')) && parent?.filename && isSnapshotArg(parent.filename)) {
+      const parentDir = parent.filename.substring(0, parent.filename.lastIndexOf('/'));
+      const candidate = toCanonical(parentDir + '/' + request);
+      // Try exact, then with extensions, then as directory
+      const resolved = tryResolveInSnapshot(candidate, sfs);
+      if (resolved) return resolved;
+    }
+
+    // Bare specifier from within snapshot (package name)
+    if (parent?.filename && isSnapshotArg(parent.filename) && !request.startsWith('.') && !request.startsWith('/')) {
+      const resolved = tryResolveBareInSnapshot(request, parent.filename, sfs);
+      if (resolved) return resolved;
+    }
+
     return origResolveFilename.call(this, request, parent, isMain, options);
   };
 
@@ -314,6 +329,69 @@ export function patchFS(sfs: SnapshotFS): () => void {
     }
     return origCompile.call(this, content, filename);
   };
+
+  // ── CJS resolution helpers ──
+
+  function tryResolveInSnapshot(candidate: string, sfsInst: SnapshotFS): string | null {
+    const EXTS = ['.js', '.cjs', '.mjs', '.json', '.node'];
+    // Exact file
+    if (sfsInst.existsSync(candidate) && sfsInst.statSync(candidate).isFile()) return candidate;
+    // With extensions
+    for (const ext of EXTS) {
+      const withExt = candidate + ext;
+      if (sfsInst.existsSync(withExt) && sfsInst.statSync(withExt).isFile()) return withExt;
+    }
+    // Directory with index
+    if (sfsInst.existsSync(candidate) && sfsInst.statSync(candidate).isDirectory()) {
+      const pjPath = candidate + '/package.json';
+      if (sfsInst.existsSync(pjPath)) {
+        const pkg = sfsInst.getPackage(pjPath);
+        if (pkg?.main) {
+          const mainPath = toCanonical(candidate + '/' + pkg.main);
+          const resolved = tryResolveInSnapshot(mainPath, sfsInst);
+          if (resolved) return resolved;
+        }
+      }
+      for (const ext of EXTS) {
+        const indexPath = candidate + '/index' + ext;
+        if (sfsInst.existsSync(indexPath)) return indexPath;
+      }
+    }
+    return null;
+  }
+
+  function tryResolveBareInSnapshot(specifier: string, parentFilename: string, sfsInst: SnapshotFS): string | null {
+    const pkgName = specifier.startsWith('@')
+      ? specifier.split('/').slice(0, 2).join('/')
+      : specifier.split('/')[0];
+    const subpath = specifier.slice(pkgName.length);
+    const appId = sfsInst.getAppId();
+    const snapRoot = '/snapshot/' + appId;
+
+    let searchDir = parentFilename.substring(0, parentFilename.lastIndexOf('/'));
+    while (searchDir.startsWith(snapRoot)) {
+      const nmDir = searchDir + '/node_modules/' + pkgName;
+      if (sfsInst.existsSync(nmDir)) {
+        if (!subpath) {
+          // Root import — check exports, then main, then index
+          const pkgJsonPath = nmDir + '/package.json';
+          const pkg = sfsInst.existsSync(pkgJsonPath) ? sfsInst.getPackage(pkgJsonPath) : null;
+          if (pkg?.main) {
+            const resolved = tryResolveInSnapshot(toCanonical(nmDir + '/' + pkg.main), sfsInst);
+            if (resolved) return resolved;
+          }
+          const resolved = tryResolveInSnapshot(nmDir + '/index', sfsInst);
+          if (resolved) return resolved;
+        } else {
+          const resolved = tryResolveInSnapshot(toCanonical(nmDir + subpath), sfsInst);
+          if (resolved) return resolved;
+        }
+        return null;
+      }
+      searchDir = searchDir.substring(0, searchDir.lastIndexOf('/'));
+    }
+    return null;
+  }
 
   // ── Restore function ──
 
