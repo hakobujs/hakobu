@@ -283,14 +283,14 @@
     - **Likely output:** update to `packages/hakobu/lib/bundler.ts`, new fixture
 
 - [ ] 17. Bundle-mode source maps
-  - [ ] 17.1 Define the bundled source-map contract
-    - Decide where source maps are stored in the snapshot (inline vs sidecar)
-    - Define how `Error.stack` and `--enable-source-maps` interact with
-      bundled snapshot paths
-    - Document what is and is not mapped (original TS line → bundle line →
-      snapshot path)
+  - [x] 17.1 Define the bundled source-map contract
+    - Sidecar `.map` files (not inline) — standard Rolldown output, zero runtime cost
+    - Relative `sourceMappingURL` works in snapshot (prelude's fs.readFileSync serves maps)
+    - Stack traces show original source paths via `--enable-source-maps`
+    - Same mechanism for single-chunk and code-split (per-file sidecar)
+    - No runtime changes needed — prelude already serves arbitrary snapshot files
     - _Depends on: 16.1, 16.3_
-    - **Likely output:** `docs/bundle-source-maps.md`
+    - **Output:** `docs/bundle-source-maps.md`
 
   - [ ] 17.2 Implement source-map generation and packaging
     - Enable Rolldown source-map output (`sourcemap: true`)

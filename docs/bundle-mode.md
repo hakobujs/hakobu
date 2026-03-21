@@ -51,7 +51,7 @@ Source project  ──→  Rolldown  ──→  Bundled JS  ──→  Hakobu pa
   (TS, monorepo)      (step 0)       (temp dir)        (steps 1-8)
 ```
 
-1. Rolldown bundles the entry and all reachable dependencies into a single `.js` file
+1. Rolldown bundles the entry and all reachable dependencies into one or more `.js` chunks
 2. Post-bundle patches fix known bundler-hostile patterns (see below)
 3. A minimal `package.json` is generated alongside the bundle
 4. The Hakobu packaging pipeline runs on this temp directory
@@ -95,17 +95,23 @@ await packageApp({
 Bundle mode produces a working executable, but the internals differ from native
 mode in specific ways. These are tradeoffs, not bugs.
 
-### Single-chunk output
+### Output shape: code-split when safe, single-chunk when required
 
-The Rolldown adapter produces a single `.js` file with all code inlined. This
-means:
+The Rolldown adapter now attempts **code-split output first**. If the emitted
+chunks are safe for packaged execution, Hakobu keeps the chunk graph. If the
+bundle still contains raw CJS `__dirname` / `__filename` globals that would be
+incorrect after splitting, Hakobu falls back to the existing single-chunk path.
 
-- **No `node_modules` in the snapshot.** All dependencies are bundled into one file.
-- **Dynamic `import()` with variable arguments may break.** Rolldown inlines
-  dynamic imports, so `import(someVariable)` cannot lazily load a module that
-  wasn't statically reachable.
-- **Source maps are not preserved.** Stack traces show bundle-internal line numbers.
-- **Smaller snapshot.** Tree-shaking removes unused exports.
+This means:
+
+- **No `node_modules` in the snapshot.** Dependencies are still bundled into JS output files.
+- **Dynamic `import()` with variable arguments may still break.** Only statically
+  traceable imports can be bundled.
+- **Source maps are planned.** When implemented, sidecar `.map` files will be
+  included in the snapshot. Enable with `NODE_OPTIONS=--enable-source-maps`.
+  See `docs/bundle-source-maps.md` for the design contract.
+- **Chunk count is correctness-driven.** Safe projects can produce multiple chunks;
+  unsafe ones fall back to one.
 
 ### `__dirname` and `__filename`
 
@@ -113,16 +119,17 @@ Rolldown outputs ESM format. CJS modules that use `__dirname` or `__filename`
 are converted, but some references survive without polyfills — particularly in
 deeply nested CJS code that Rolldown inlines verbatim.
 
-Hakobu's Rolldown adapter addresses this by:
-- Injecting a module-level banner that defines `__dirname` and `__filename`
-  from `import.meta.url`
-- Disabling code splitting (`codeSplitting: false`) to ensure the polyfill
-  is visible everywhere in a single output chunk
+Hakobu's Rolldown adapter addresses this in two ways:
+- In code-split mode, it injects helper imports so Rolldown can lower many
+  CommonJS `__dirname` / `__filename` references to `import.meta.url`-based expressions.
+- If raw `__dirname` / `__filename` globals still survive in emitted chunks,
+  Hakobu falls back to a single-chunk bundle with explicit module-level
+  `__dirname` / `__filename` shims.
 
-**Caveat:** The `__dirname` value in bundle mode points to the snapshot entry
-directory, not to the original source file's directory. Code that uses `__dirname`
-to locate sibling files relative to a specific source file may resolve to the
-wrong path. This is inherent to single-file bundling — not specific to Hakobu.
+**Caveat:** In single-chunk fallback mode, the `__dirname` value points to the
+snapshot entry directory, not to the original source file's directory. In
+code-split mode, per-chunk `import.meta.url` lowering keeps chunk-local paths
+correct for the safe supported subset.
 
 ### External modules
 
@@ -207,13 +214,12 @@ If none of these exist, bundling fails with a clear error asking for `--entry`.
   allows future bundlers, but only Rolldown is implemented.
 - **Rolldown is an optional dependency.** If it is not installed, `--bundle`
   fails with a message telling you to install it.
-- **No code-split output.** All code is inlined into one chunk. This is required
-  for correct `__dirname`/`__filename` handling but increases bundle size for
-  projects with many lazy-loaded modules.
+- **Code-split output is a safe subset, not a blanket guarantee.** If raw CJS
+  path globals survive bundling, Hakobu falls back to single-chunk output.
 - **No source maps.** The bundled output does not include source maps.
   Stack traces reference bundle-internal positions.
-- **Windows not yet validated.** Bundle mode has been tested on macOS (arm64).
-  Linux should work. Windows bundle-mode packaging has not been verified.
+- **Validated on macOS, Linux, and Windows.** Real external-project validation
+  has now passed on all Tier 1 targets.
 
 ## Comparison table
 
@@ -225,6 +231,6 @@ If none of these exist, bundling fails with a clear error asking for `--entry`.
 | Source maps | Preserved (file-level) | Not preserved |
 | Tree-shaking | No | Yes |
 | Workspace deps | Must be built first | Resolved by Rolldown |
-| File count | Many (mirrors source) | 1 (single bundle) |
+| File count | Many (mirrors source) | 1+ (safe chunks or single-chunk fallback) |
 | Default | Yes | No (`--bundle` required) |
 | Bundler required | No | Yes (rolldown) |
