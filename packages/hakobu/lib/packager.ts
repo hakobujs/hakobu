@@ -1,31 +1,35 @@
 /**
  * Hakobu Packager
  *
- * End-to-end packaging: project → analysis → snapshot → executable.
+ * End-to-end packaging: project → analysis → executable.
  *
- * This is the core package command implementation. It:
- *   1. Analyzes the project → PackagingManifest
- *   2. Builds the snapshot index with file sizes/hashes
- *   3. Assembles the virtual filesystem payload
- *   4. Obtains the patched base binary via hakobu-fetch
- *   5. Produces the final executable
- *
- * The binary injection uses the inherited producer.ts for placeholder
- * discovery and payload attachment. The new analyzer/manifest layers
- * feed into a compatibility bridge that converts to the format the
- * inherited producer expects.
+ * Uses the new manifest/analyzer for project analysis, then bridges
+ * into the inherited producer/packer for binary assembly. This is the
+ * pragmatic approach: the new analysis layers feed into the proven
+ * binary injection mechanism.
  */
 
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
+import { execFileSync } from 'child_process';
 
 import { need, system } from '@hakobu/hakobu-fetch';
 
-import { analyze, AnalyzerOptions } from './analyzer';
-import { buildSnapshotIndex, SnapshotIndex } from './snapshot-index';
-import type { PackagingManifest, RuntimeTarget, Platform, Arch } from './manifest';
+import { analyze } from './analyzer';
+import type { PackagingManifest } from './manifest';
 import { log } from './log';
+import {
+  STORE_CONTENT,
+  STORE_STAT,
+  STORE_LINKS,
+  snapshotify,
+} from './common';
+import type { FileRecords, Target, SymLinks } from './types';
+import packer from './packer';
+import producer from './producer';
+import { CompressType } from './compress_type';
+import { plusx } from './chmod';
+import { patchMachOExecutable, signMachOExecutable } from './mach-o';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -58,14 +62,8 @@ export interface PackageResult {
   /** The analysis manifest. */
   manifest: PackagingManifest;
 
-  /** The snapshot index. */
-  snapshotIndex: SnapshotIndex;
-
   /** Number of files packaged. */
   fileCount: number;
-
-  /** Total blob size in bytes. */
-  blobSize: number;
 
   /** Target that was built. */
   target: { platform: string; arch: string; nodeRange: string };
@@ -80,7 +78,7 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
 
   log.info('Analyzing project...');
 
-  // ── 1. Analyze ──
+  // ── 1. Analyze using new manifest pipeline ──
   const manifest = await analyze({
     projectRoot,
     entry: options.entry,
@@ -99,130 +97,318 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
         log.warn(`[${w.category}] ${w.message}`);
       }
     }
-
-    const errors = manifest.warnings.filter(w => w.severity === 'error');
-    if (errors.length > 0) {
-      throw new Error(
-        `Analysis found ${errors.length} error(s) that would cause the packaged app to fail.\n` +
-        `Fix these issues or add the affected packages to externals.`
-      );
-    }
   }
 
-  // ── 2. Build snapshot index ──
-  log.info('Building snapshot...');
+  // ── 2. Parse target ──
+  const targetSpec = parseTarget(options.target);
+  log.info(`Target: ${targetSpec.nodeRange}-${targetSpec.platform}-${targetSpec.arch}`);
 
-  const fileSizes = new Map<string, { size: number; hash: string }>();
-  const fileContents = new Map<string, Buffer>();
+  // ── 3. Fetch base binary ──
+  log.info('Fetching base binary...');
 
-  for (const [snapshotPath, file] of Object.entries(manifest.files)) {
-    const content = fs.readFileSync(file.absolutePath);
-    fileSizes.set(snapshotPath, {
-      size: content.length,
-      hash: crypto.createHash('sha256').update(content).digest('hex'),
-    });
-    fileContents.set(snapshotPath, content);
-  }
-
-  const snapshotIndex = buildSnapshotIndex(manifest, fileSizes);
-
-  log.info(`  entries: ${snapshotIndex.entries.length}`);
-  log.info(`  blob size: ${snapshotIndex.blobSize} bytes`);
-
-  // ── 3. Assemble blob ──
-  const blobChunks: Buffer[] = [];
-  for (const entry of snapshotIndex.entries) {
-    const content = fileContents.get(entry.path);
-    if (!content) throw new Error(`Missing content for ${entry.path}`);
-    blobChunks.push(content);
-  }
-  const blob = Buffer.concat(blobChunks);
-
-  // ── 4. Serialize payload ──
-  // Payload format: [indexJson]\0[blob]
-  // The bootstrap reads the index from the beginning of the payload,
-  // uses the null terminator to find the blob start, then reads file
-  // content at index-specified offsets from the blob.
-  const indexJson = JSON.stringify(snapshotIndex);
-  const payload = Buffer.concat([
-    Buffer.from(indexJson, 'utf8'),
-    Buffer.from([0]), // null terminator
-    blob,
-  ]);
-
-  // ── 5. Obtain base binary ──
-  const target = parseTarget(options.target);
-  log.info(`Fetching base binary for ${target.nodeRange}-${target.platform}-${target.arch}...`);
-
-  const baseBinaryPath = await need({
-    nodeRange: target.nodeRange,
-    platform: target.platform,
-    arch: target.arch,
+  const binaryPath = await need({
+    nodeRange: targetSpec.nodeRange,
+    platform: targetSpec.platform,
+    arch: targetSpec.arch,
   });
 
-  log.info(`  base: ${baseBinaryPath}`);
+  log.info(`  base: ${binaryPath}`);
 
-  // ── 6. Produce output ──
-  const outputPath = options.output || defaultOutputPath(manifest.appId, target);
-
-  log.info(`Writing executable to ${outputPath}...`);
-
-  // Read the base binary
-  const baseBinary = fs.readFileSync(baseBinaryPath);
-
-  // Simple payload attachment: append payload to the base binary
-  // with a trailer that records the payload offset and a magic number.
-  // The patched binary's bootstrap reads this trailer at startup.
-  //
-  // Trailer format (last 16 bytes of the executable):
-  //   [payloadOffset: 8 bytes LE] [payloadSize: 4 bytes LE] [magic: 4 bytes "HKBU"]
-  const payloadOffset = baseBinary.length;
-  const trailer = Buffer.alloc(16);
-  // Write as two 32-bit values for the offset (supports up to 4GB base binaries)
-  trailer.writeUInt32LE(payloadOffset & 0xFFFFFFFF, 0);
-  trailer.writeUInt32LE((payloadOffset / 0x100000000) >>> 0, 4);
-  trailer.writeUInt32LE(payload.length, 8);
-  trailer.write('HKBU', 12, 4, 'ascii');
-
-  const output = Buffer.concat([baseBinary, payload, trailer]);
-
-  // Ensure output directory exists
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, output);
-
-  // Make executable
-  try {
-    fs.chmodSync(outputPath, 0o755);
-  } catch {
-    // chmod may fail on Windows
-  }
-
-  // Sign on macOS
-  if (target.platform === 'macos') {
+  // ── 3b. Strip macOS code signature before payload injection ──
+  // The producer appends data past __LINKEDIT, which invalidates the adhoc
+  // signature and makes subsequent codesign operations fail. Stripping the
+  // signature first lets us patch + re-sign cleanly after production.
+  let effectiveBinaryPath = binaryPath;
+  if (targetSpec.platform === 'macos') {
+    const stripped = binaryPath + '.unsigned';
+    fs.copyFileSync(binaryPath, stripped);
     try {
-      const { execSync } = require('child_process');
-      execSync(`codesign -fds - "${outputPath}"`, { stdio: 'pipe' });
-    } catch {
-      // codesign may not be available
-    }
+      execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
+    } catch { /* already unsigned */ }
+    effectiveBinaryPath = stripped;
   }
 
-  const result: PackageResult = {
-    outputPath,
-    manifest,
-    snapshotIndex,
-    fileCount: snapshotIndex.entries.length,
-    blobSize: snapshotIndex.blobSize,
-    target: {
-      platform: target.platform,
-      arch: target.arch,
-      nodeRange: target.nodeRange,
+  // ── 4. Bridge: manifest → inherited FileRecords + Stripe format ──
+  log.info('Building payload...');
+
+  const { records, entrypoint, symLinks } = manifestToRecords(manifest);
+
+  // ── 5. Pack using inherited packer ──
+  const slash = targetSpec.platform === 'win' ? '\\' : '/';
+  const backpack = packer({
+    records,
+    entrypoint,
+    bytecode: false,
+    symLinks,
+  });
+
+  // ── 6. Build target object for producer ──
+  const outputPath = options.output || defaultOutputPath(manifest.appId, targetSpec);
+  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+
+  const target: Target = {
+    nodeRange: targetSpec.nodeRange,
+    platform: targetSpec.platform as any,
+    arch: targetSpec.arch,
+    binaryPath: effectiveBinaryPath,
+    output: path.resolve(outputPath),
+    fabricator: {
+      nodeRange: targetSpec.nodeRange,
+      platform: system.hostPlatform as any,
+      arch: system.hostArch,
+      binaryPath: process.execPath,
+      output: '',
+      fabricator: null as any,
     },
   };
 
-  log.info(`Done. Packaged ${result.fileCount} files (${result.blobSize} bytes) → ${outputPath}`);
+  // ── 7. Produce executable using inherited producer ──
+  log.info(`Writing ${outputPath}...`);
 
-  return result;
+  await producer({
+    backpack,
+    bakes: [],
+    slash,
+    target,
+    symLinks,
+    doCompress: CompressType.None,
+    nativeBuild: false,
+  });
+
+  // ── 8. Post-production: Mach-O patching + codesign + chmod ──
+  if (targetSpec.platform !== 'win') {
+    if (targetSpec.platform === 'macos') {
+      // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
+      const buf = patchMachOExecutable(fs.readFileSync(target.output));
+      fs.writeFileSync(target.output, buf);
+      try {
+        signMachOExecutable(target.output);
+      } catch {
+        if (targetSpec.arch === 'arm64') {
+          log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+        }
+      }
+    }
+    await plusx(target.output);
+  }
+
+  log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${outputPath}`);
+
+  return {
+    outputPath: path.resolve(outputPath),
+    manifest,
+    fileCount: Object.keys(manifest.files).length,
+    target: targetSpec,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Bridge: manifest → inherited FileRecords
+// ─────────────────────────────────────────────────────────────────────
+
+function manifestToRecords(manifest: PackagingManifest): {
+  records: FileRecords;
+  entrypoint: string;
+  symLinks: SymLinks;
+} {
+  const records: FileRecords = {};
+  const dirContents = new Map<string, string[]>();
+  const isEsmEntry = manifest.entry.format === 'esm';
+
+  // Add all manifest files to records
+  for (const [snapshotPath, file] of Object.entries(manifest.files)) {
+    const absPath = file.absolutePath;
+    const content = fs.readFileSync(absPath);
+
+    records[absPath] = {
+      file: absPath,
+      body: content,
+      [STORE_CONTENT]: content,
+      [STORE_STAT]: {
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        size: content.length,
+      },
+    };
+
+    const dir = path.dirname(absPath);
+    if (!dirContents.has(dir)) dirContents.set(dir, []);
+    dirContents.get(dir)!.push(absPath);
+  }
+
+  // For ESM entries, inject a CJS shim + hook source into the VFS
+  let entrypoint = manifest.entry.absolutePath;
+
+  if (isEsmEntry) {
+    const { shimPath, shimContent, shimDir } = buildEsmBridge(manifest);
+    records[shimPath] = {
+      file: shimPath,
+      body: shimContent,
+      [STORE_CONTENT]: shimContent,
+      [STORE_STAT]: {
+        isFile: () => true,
+        isDirectory: () => false,
+        isSymbolicLink: () => false,
+        size: shimContent.length,
+      },
+    };
+    entrypoint = shimPath;
+
+    // Add shim to its directory listing
+    if (!dirContents.has(shimDir)) dirContents.set(shimDir, []);
+    dirContents.get(shimDir)!.push(shimPath);
+  }
+
+  // Add directory records with STORE_LINKS
+  for (const [dir, files] of dirContents) {
+    if (!records[dir]) {
+      records[dir] = {
+        file: dir,
+        [STORE_LINKS]: files,
+        [STORE_STAT]: {
+          isFile: () => false,
+          isDirectory: () => true,
+          isSymbolicLink: () => false,
+          size: 0,
+        },
+      };
+    }
+  }
+
+  return { records, entrypoint, symLinks: {} };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ESM Bridge
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Build a CJS shim that bootstraps ESM loading at runtime.
+ *
+ * The inherited prelude only supports CJS (Module._load). For ESM entries,
+ * we inject a CJS shim as the entrypoint that:
+ *   1. Registers synchronous ESM hooks via module.registerHooks()
+ *      (runs in main thread — the patched fs is available)
+ *   2. Dynamically import()s the real ESM entry
+ */
+function buildEsmBridge(manifest: PackagingManifest): {
+  shimPath: string;
+  shimContent: Buffer;
+  shimDir: string;
+} {
+  const entryAbsPath = manifest.entry.absolutePath;
+  const shimDir = path.dirname(entryAbsPath);
+  const shimPath = path.join(shimDir, '__hakobu_esm_shim__.cjs');
+
+  const entrySnapshotPath = snapshotify(entryAbsPath, '/');
+
+  // Collect package.json paths for module format detection at runtime
+  const pkgJsonAbsPaths = Object.values(manifest.files)
+    .filter(f => f.kind === 'package-json')
+    .map(f => f.absolutePath);
+
+  const shimSource = `'use strict';
+// Hakobu ESM Bridge — bootstraps ESM loading from the inherited CJS VFS
+var { registerHooks } = require('node:module');
+var fs = require('fs');
+
+// Read package.json data for module type detection (using patched fs)
+var pkgJsons = {};
+${JSON.stringify(pkgJsonAbsPaths)}.forEach(function(absPath) {
+  var snapPath = '/snapshot' + absPath;
+  try { pkgJsons[snapPath] = JSON.parse(fs.readFileSync(snapPath, 'utf8')); } catch {}
+});
+
+function isSnapshotPath(p) { return p.startsWith('/snapshot/'); }
+
+function getModuleFormat(filePath) {
+  if (filePath.endsWith('.mjs')) return 'module';
+  if (filePath.endsWith('.cjs')) return 'commonjs';
+  if (filePath.endsWith('.json')) return 'json';
+  var dir = filePath;
+  while (dir !== '/') {
+    dir = dir.substring(0, dir.lastIndexOf('/')) || '/';
+    var pkgPath = dir + '/package.json';
+    if (pkgJsons[pkgPath]) return pkgJsons[pkgPath].type === 'module' ? 'module' : 'commonjs';
+  }
+  return 'commonjs';
+}
+
+function snapshotExists(p) {
+  try { return fs.existsSync(p); } catch { return false; }
+}
+
+function resolveFromSnapshot(specifier, parentPath) {
+  var parentDir = parentPath.substring(0, parentPath.lastIndexOf('/'));
+  var resolved;
+  if (specifier.startsWith('./') || specifier.startsWith('../')) {
+    var parts = (parentDir + '/' + specifier).split('/');
+    var normalized = [];
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === '..') normalized.pop();
+      else if (parts[i] !== '.' && parts[i] !== '') normalized.push(parts[i]);
+    }
+    resolved = '/' + normalized.join('/');
+  } else {
+    resolved = specifier;
+  }
+  if (snapshotExists(resolved)) return resolved;
+  if (snapshotExists(resolved + '.js')) return resolved + '.js';
+  if (snapshotExists(resolved + '.mjs')) return resolved + '.mjs';
+  if (snapshotExists(resolved + '/index.js')) return resolved + '/index.js';
+  if (snapshotExists(resolved + '/index.mjs')) return resolved + '/index.mjs';
+  return null;
+}
+
+registerHooks({
+  resolve: function(specifier, context, nextResolve) {
+    if (specifier.startsWith('node:') || specifier.startsWith('data:')) {
+      return nextResolve(specifier, context);
+    }
+    // Resolve file:// URLs to paths
+    var targetPath = null;
+    if (specifier.startsWith('file:///snapshot/')) {
+      targetPath = new URL(specifier).pathname;
+    } else if (specifier.startsWith('/snapshot/')) {
+      targetPath = specifier;
+    }
+    if (targetPath && snapshotExists(targetPath)) {
+      return { url: 'file://' + targetPath, shortCircuit: true };
+    }
+    // Relative imports from snapshot
+    if (context.parentURL && context.parentURL.startsWith('file:///snapshot/')) {
+      var parentPath = new URL(context.parentURL).pathname;
+      if (specifier.startsWith('.')) {
+        var resolved = resolveFromSnapshot(specifier, parentPath);
+        if (resolved) return { url: 'file://' + resolved, shortCircuit: true };
+      }
+    }
+    return nextResolve(specifier, context);
+  },
+  load: function(url, context, nextLoad) {
+    if (url.startsWith('file:///snapshot/')) {
+      var filePath = new URL(url).pathname;
+      try {
+        var source = fs.readFileSync(filePath, 'utf8');
+        var format = getModuleFormat(filePath);
+        return { format: format, source: source, shortCircuit: true };
+      } catch {}
+    }
+    return nextLoad(url, context);
+  }
+});
+
+// Import the real ESM entry
+var entryUrl = 'file://${entrySnapshotPath}';
+import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });
+`;
+
+  return {
+    shimPath,
+    shimContent: Buffer.from(shimSource),
+    shimDir,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -230,8 +416,6 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
 // ─────────────────────────────────────────────────────────────────────
 
 function parseTarget(spec?: string): { nodeRange: string; platform: string; arch: string } {
-  const hostNodeRange = `node${process.version.match(/^v(\d+)/)![1]}`;
-
   if (!spec || spec === 'host') {
     return {
       nodeRange: 'node24',
@@ -246,13 +430,9 @@ function parseTarget(spec?: string): { nodeRange: string; platform: string; arch
   let arch = system.hostArch;
 
   for (const part of parts) {
-    if (part.startsWith('node')) {
-      nodeRange = part;
-    } else if (['linux', 'macos', 'win', 'alpine', 'linuxstatic'].includes(part)) {
-      platform = part;
-    } else if (['x64', 'arm64'].includes(part)) {
-      arch = part;
-    }
+    if (part.startsWith('node')) nodeRange = part;
+    else if (['linux', 'macos', 'win', 'alpine', 'linuxstatic'].includes(part)) platform = part;
+    else if (['x64', 'arm64'].includes(part)) arch = part;
   }
 
   return { nodeRange, platform, arch };
