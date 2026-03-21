@@ -42,6 +42,9 @@
     "tinyglobby": "^0.2.11",
     "unzipper": "^0.12.3"
   },
+  "optionalDependencies": {
+    "rolldown": "^1.0.0-rc.1"
+  },
   "devDependencies": {
     "@release-it/conventional-changelog": "^10.0.5",
     "@types/babel__generator": "^7.6.5",

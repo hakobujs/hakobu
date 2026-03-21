@@ -25,6 +25,8 @@ Options:
   --target <spec>     Target (e.g., node24-macos-arm64). Default: host
   --output <path>     Output executable path
   --entry <file>      Entry file (relative to project root)
+  --bundle [name]     Pre-bundle with Rolldown before packaging (for TS/monorepos)
+  --external <mod>    Keep module external when bundling (repeatable)
   --help, -h          Show this help
   --version, -v       Show version
 `.trim();
@@ -35,7 +37,7 @@ async function main() {
   }
 
   const argv = minimist(process.argv.slice(2), {
-    string: ['target', 'output', 'entry'],
+    string: ['target', 'output', 'entry', 'external'],
     boolean: ['help', 'version'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target' },
   });
@@ -68,11 +70,28 @@ async function main() {
     default: {
       // Default: treat the first arg as a project root to package
       const projectRoot = path.resolve(command);
+
+      // Parse --bundle flag: --bundle (true/rolldown), --bundle=rolldown
+      let bundle: boolean | string | undefined;
+      if (argv.bundle === true || argv.bundle === '') {
+        bundle = true;
+      } else if (typeof argv.bundle === 'string') {
+        bundle = argv.bundle;
+      }
+
+      // Parse --external: can be string or array
+      let bundleExternal: string[] | undefined;
+      if (argv.external) {
+        bundleExternal = Array.isArray(argv.external) ? argv.external : [argv.external];
+      }
+
       await packageApp({
         projectRoot,
         entry: argv.entry,
         target: argv.target,
         output: argv.output,
+        bundle,
+        bundleExternal,
       });
       break;
     }

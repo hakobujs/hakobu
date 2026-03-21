@@ -168,14 +168,16 @@
     - _Requirements: 9.2, 14.1, 14.2_
 
 - [ ] 11. Add optional bundle mode
-  - [ ] 11.1 Define bundle-mode plugin interface
+  - [x] 11.1 Define bundle-mode plugin interface
     - Keep bundle mode as a pre-processing adapter before snapshot assembly
     - _Requirements: 8.2, 8.3_
+    - **Output:** `packages/hakobu/lib/bundler.ts` (BundleAdapter interface, BundleInput/Output types)
 
-  - [ ] 11.2 Integrate the first supported bundler
+  - [x] 11.2 Integrate the first supported bundler
     - Prefer Rolldown as the first implementation target
     - Preserve native mode as the default path
     - _Requirements: 8.1, 8.2, 8.3_
+    - **Output:** `packages/hakobu/lib/bundler.ts` (RolldownAdapter), `--bundle` CLI flag
 
   - [ ] 11.3 Document semantic differences in bundle mode
     - Make bundle-mode caveats explicit in CLI output and docs

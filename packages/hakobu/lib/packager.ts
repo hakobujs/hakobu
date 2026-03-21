@@ -16,6 +16,8 @@ import { execFileSync } from 'child_process';
 import { need, system } from '@hakobu/hakobu-fetch';
 
 import { analyze } from './analyzer';
+import { getAdapter } from './bundler';
+import type { BundleOutput } from './bundler';
 import type { PackagingManifest } from './manifest';
 import { log } from './log';
 import {
@@ -53,6 +55,17 @@ export interface PackageOptions {
 
   /** External artifact names. */
   externals?: string[];
+
+  /**
+   * Bundle mode: pre-bundle the project before packaging.
+   * Set to 'rolldown' to use Rolldown, or true for the default bundler.
+   * When enabled, the project is bundled into a single JS file before
+   * being fed into the packaging pipeline.
+   */
+  bundle?: boolean | string;
+
+  /** Module names/patterns to keep external when bundling. */
+  bundleExternal?: string[];
 }
 
 export interface PackageResult {
@@ -74,8 +87,75 @@ export interface PackageResult {
 // ─────────────────────────────────────────────────────────────────────
 
 export async function packageApp(options: PackageOptions): Promise<PackageResult> {
-  const { projectRoot } = options;
+  let { projectRoot } = options;
+  let bundleOutput: BundleOutput | null = null;
 
+  // ── 0. Bundle mode (optional pre-processing) ──
+  if (options.bundle) {
+    log.info('Bundling project...');
+
+    const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
+    const adapter = getAdapter(bundlerName);
+
+    // Determine entry for bundling
+    const entry = options.entry || resolveEntryForBundle(projectRoot);
+
+    // Determine app name from package.json
+    let appName = 'app';
+    const pkgJsonPath = path.join(projectRoot, 'package.json');
+    if (fs.existsSync(pkgJsonPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+        appName = pkg.name || 'app';
+      } catch {}
+    }
+
+    bundleOutput = await adapter.bundle({
+      projectRoot,
+      entry,
+      external: options.bundleExternal,
+      appName,
+    });
+
+    for (const w of bundleOutput.warnings) {
+      log.warn(`[bundle] ${w.message}`);
+    }
+
+    // Switch to the bundled project for the rest of the pipeline
+    projectRoot = bundleOutput.projectRoot;
+    // Clear entry override — the bundle's package.json has the right main
+    options = { ...options, entry: undefined };
+  }
+
+  try {
+    return await packageAppInner(projectRoot, options, bundleOutput);
+  } finally {
+    // Clean up bundle temp directory
+    if (bundleOutput) bundleOutput.cleanup();
+  }
+}
+
+function resolveEntryForBundle(projectRoot: string): string {
+  const pkgJsonPath = path.join(projectRoot, 'package.json');
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      if (pkg.main) return pkg.main;
+      if (pkg.module) return pkg.module;
+    } catch {}
+  }
+  // Fallback: common entry patterns
+  for (const candidate of ['src/index.ts', 'src/index.js', 'index.ts', 'index.js']) {
+    if (fs.existsSync(path.join(projectRoot, candidate))) return candidate;
+  }
+  throw new Error('Cannot determine entry for bundling. Specify --entry.');
+}
+
+async function packageAppInner(
+  projectRoot: string,
+  options: PackageOptions,
+  bundleOutput: BundleOutput | null,
+): Promise<PackageResult> {
   log.info('Analyzing project...');
 
   // ── 1. Analyze using new manifest pipeline ──
@@ -365,6 +445,10 @@ registerHooks({
   resolve: function(specifier, context, nextResolve) {
     if (specifier.startsWith('node:') || specifier.startsWith('data:')) {
       return nextResolve(specifier, context);
+    }
+    // Stub unsupported runtime-specific protocols (bun:, deno:, etc.)
+    if (specifier.startsWith('bun:') || specifier.startsWith('deno:')) {
+      return { url: 'data:text/javascript,export default undefined;export var Database=class{constructor(){throw new Error("' + specifier + ' not available")}};', shortCircuit: true };
     }
     // Resolve file:// URLs to paths
     var targetPath = null;

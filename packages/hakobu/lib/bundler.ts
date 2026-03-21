@@ -1,0 +1,303 @@
+/**
+ * Hakobu Bundle Mode
+ *
+ * Optional pre-processing step that bundles a project before packaging.
+ * This is useful for:
+ *   - TypeScript projects (compiled to JS)
+ *   - Workspace monorepos (resolved to a single bundle)
+ *   - Projects with complex dependency graphs (tree-shaken)
+ *
+ * Bundle mode is NOT the default. Native mode (direct packaging of JS files)
+ * remains the primary path. Bundle mode is an opt-in adapter that produces
+ * a self-contained JS project that the existing packaging pipeline can consume.
+ *
+ * Architecture:
+ *   1. BundleAdapter receives project root + entry + options
+ *   2. Adapter produces a bundled project in a temp directory
+ *   3. Packager runs on the temp directory as if it were a normal JS project
+ *   4. Temp directory is cleaned up after packaging
+ */
+
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import { log } from './log';
+
+// ─────────────────────────────────────────────────────────────────────
+// Bundle adapter interface
+// ─────────────────────────────────────────────────────────────────────
+
+export interface BundleInput {
+  /** Absolute path to the project root. */
+  projectRoot: string;
+
+  /** Entry file (relative to project root or absolute). */
+  entry: string;
+
+  /** Module names or patterns to keep external (not bundled). */
+  external?: string[];
+
+  /** The app name (used for naming the bundle output). */
+  appName: string;
+}
+
+export interface BundleOutput {
+  /** Absolute path to the bundled project directory. */
+  projectRoot: string;
+
+  /** Entry file path relative to the bundled project root. */
+  entry: string;
+
+  /** Warnings generated during bundling. */
+  warnings: BundleWarning[];
+
+  /** Cleanup function to remove temp directory. */
+  cleanup: () => void;
+}
+
+export interface BundleWarning {
+  message: string;
+  file?: string;
+}
+
+export interface BundleAdapter {
+  /** Human-readable name of the bundler. */
+  readonly name: string;
+
+  /** Bundle the project. */
+  bundle(input: BundleInput): Promise<BundleOutput>;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Rolldown adapter
+// ─────────────────────────────────────────────────────────────────────
+
+export class RolldownAdapter implements BundleAdapter {
+  readonly name = 'rolldown';
+
+  async bundle(input: BundleInput): Promise<BundleOutput> {
+    // Dynamic import — rolldown is ESM-only and optional
+    let rolldown: any;
+    try {
+      rolldown = await loadRolldown();
+    } catch {
+      throw new Error(
+        'Rolldown is required for bundle mode but could not be loaded.\n' +
+        'Install it with: pnpm add rolldown'
+      );
+    }
+
+    const { projectRoot, entry, external = [], appName } = input;
+    const entryPath = path.isAbsolute(entry)
+      ? entry
+      : path.resolve(projectRoot, entry);
+
+    if (!fs.existsSync(entryPath)) {
+      throw new Error(`Bundle entry not found: ${entryPath}`);
+    }
+
+    // Create temp output directory
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hakobu-bundle-'));
+    const outFile = 'index.js';
+    const warnings: BundleWarning[] = [];
+
+    try {
+      log.info(`  bundler: rolldown`);
+      log.info(`  entry: ${path.relative(projectRoot, entryPath)}`);
+
+      // Default externals: node builtins + runtime-specific protocols + user-specified
+      const allExternal = [
+        /^node:/,
+        /^bun:/,
+        /^electron$/,
+        /^chromium-bidi/,
+        ...external.map(e => {
+          if (e.includes('*')) {
+            return new RegExp('^' + e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
+          }
+          return e;
+        }),
+      ];
+
+      const build = await rolldown.rolldown({
+        input: entryPath,
+        platform: 'node',
+        resolve: {
+          conditionNames: ['node', 'import', 'require', 'default'],
+          mainFields: ['module', 'main'],
+        },
+        external: allExternal,
+        onwarn: (warning: any) => {
+          warnings.push({
+            message: warning.message || String(warning),
+            file: warning.loc?.file,
+          });
+        },
+      });
+
+      // Single-chunk output ensures CJS-to-ESM polyfills apply everywhere.
+      // Banner provides module-level __dirname/__filename for CJS code
+      // that Rolldown inlines without polyfilling.
+      const result = await build.write({
+        dir: tmpDir,
+        format: 'esm',
+        entryFileNames: outFile,
+        sourcemap: false,
+        inlineDynamicImports: true,
+        banner: [
+          `import{fileURLToPath as _hk_f}from'node:url';`,
+          `import{dirname as _hk_d}from'node:path';`,
+          `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`,
+        ].join(''),
+      });
+
+      // Post-bundle: patch known bundler-hostile patterns.
+      // playwright-core uses require.resolve() and require() with absolute
+      // paths to its package.json, which break after bundling. Replace them
+      // with stubs since Hakobu's packaged apps provide executablePath directly.
+      patchBundleOutput(path.join(tmpDir, outFile));
+
+      // Create a minimal package.json for the bundled output
+      const bundledPkg = {
+        name: appName,
+        version: '0.0.0',
+        type: 'module',
+        main: outFile,
+      };
+      fs.writeFileSync(
+        path.join(tmpDir, 'package.json'),
+        JSON.stringify(bundledPkg, null, 2),
+      );
+
+      const outSize = fs.statSync(path.join(tmpDir, outFile)).size;
+      log.info(`  output: ${(outSize / 1024).toFixed(0)}KB bundled`);
+
+      if (warnings.length > 0) {
+        log.warn(`  ${warnings.length} bundler warning(s)`);
+      }
+
+      return {
+        projectRoot: tmpDir,
+        entry: outFile,
+        warnings,
+        cleanup: () => {
+          try {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+          } catch { /* best effort */ }
+        },
+      };
+    } catch (err: any) {
+      // Clean up on failure
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      throw new Error(`Rolldown bundle failed: ${err.message}`);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Post-bundle patching
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Patch known bundler-hostile patterns in the output.
+ *
+ * Some packages (notably playwright-core) use require.resolve() and require()
+ * with paths to their own package.json at runtime. After bundling, these
+ * paths are absolute build-time paths that don't exist at runtime.
+ *
+ * This applies targeted text replacements — the same approach used by
+ * the consumer project's build script and other bundlers.
+ */
+function patchBundleOutput(filePath: string): void {
+  const original = fs.readFileSync(filePath, 'utf8');
+  let code = original;
+
+  // Order matters: patch dirname(resolve(...)) before resolve(...) alone
+
+  // playwright-core: dirname(require.resolve(".../package.json"))
+  code = code.replace(
+    /(?:dirname|_hk_d)\(\s*(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)\s*\)/g,
+    'process.cwd()',
+  );
+
+  // require.resolve(".../playwright-core/package.json")
+  code = code.replace(
+    /(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    '"playwright-core-stub"',
+  );
+
+  // require(".../playwright-core/package.json")
+  code = code.replace(
+    /(?:__require|require)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    '({name:"playwright-core",version:"0.0.0"})',
+  );
+
+  // dirname(require.resolve('../../../package.json')) — relative paths invalid after bundling
+  code = code.replace(
+    /[\w$.]+\.dirname\(\s*(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)\s*\)/g,
+    'process.cwd()',
+  );
+
+  // require.resolve('../../../package.json')
+  code = code.replace(
+    /(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
+    '"package-json-stub"',
+  );
+
+  // require('../../../package.json')
+  code = code.replace(
+    /(?:__require|require)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
+    '({name:"unknown",version:"0.0.0"})',
+  );
+
+  if (code !== original) {
+    fs.writeFileSync(filePath, code);
+    log.info('  patched: bundler-hostile require patterns');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Rolldown loader (handles ESM-only package from CJS context)
+// ─────────────────────────────────────────────────────────────────────
+
+let _rolldownCache: any = null;
+
+async function loadRolldown(): Promise<any> {
+  if (_rolldownCache) return _rolldownCache;
+
+  // rolldown is ESM-only, so we need dynamic import
+  const dynamicImport = new Function('specifier', 'return import(specifier)');
+
+  // Try to find rolldown in the local node_modules first
+  const localPath = path.join(__dirname, '../node_modules/rolldown/dist/index.mjs');
+  if (fs.existsSync(localPath)) {
+    _rolldownCache = await dynamicImport(localPath);
+    return _rolldownCache;
+  }
+
+  // Fallback: try bare specifier (might work if hoisted)
+  try {
+    _rolldownCache = await dynamicImport('rolldown');
+    return _rolldownCache;
+  } catch {
+    throw new Error('rolldown not found');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Adapter registry
+// ─────────────────────────────────────────────────────────────────────
+
+const adapters: Record<string, () => BundleAdapter> = {
+  rolldown: () => new RolldownAdapter(),
+};
+
+export function getAdapter(name: string): BundleAdapter {
+  const factory = adapters[name];
+  if (!factory) {
+    throw new Error(
+      `Unknown bundler: ${name}. Available: ${Object.keys(adapters).join(', ')}`
+    );
+  }
+  return factory();
+}
