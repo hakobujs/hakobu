@@ -30,6 +30,7 @@ import os from 'os';
 import type { SnapshotFS } from './snapshot-fs';
 import type { SnapshotEntry } from './snapshot-index';
 import { toCanonical } from './snapshot-path';
+import { addonExtractionFailed } from './runtime-diagnostics';
 
 // ─────────────────────────────────────────────────────────────────────
 // Cache directory
@@ -114,8 +115,12 @@ export function extractAddon(
   }
 
   // Extract: create directory and write the addon
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(extractedPath, content);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(extractedPath, content);
+  } catch (err: any) {
+    throw addonExtractionFailed(canonical, extractedPath, err);
+  }
 
   // Set executable permission (some addons need it)
   try {

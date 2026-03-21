@@ -28,6 +28,7 @@
 import fs from 'fs';
 import path from 'path';
 import type { ExternalArtifact } from './manifest';
+import { externalNotFound, externalNotDeclared } from './runtime-diagnostics';
 
 // ─────────────────────────────────────────────────────────────────────
 // Resolution result
@@ -86,11 +87,7 @@ export class ExternalArtifactRegistry {
 
     const decl = this.declarations.get(name);
     if (!decl) {
-      throw new Error(
-        `External artifact '${name}' is not declared in the packaging manifest.\n` +
-        `Declared externals: ${[...this.declarations.keys()].join(', ') || '(none)'}\n` +
-        `Add it to the externals list in your Hakobu config.`
-      );
+      throw externalNotDeclared(name, [...this.declarations.keys()]);
     }
 
     const resolved = this.resolve(decl);
@@ -101,14 +98,11 @@ export class ExternalArtifactRegistry {
     }
 
     if (decl.required) {
-      throw new Error(
-        `Required external artifact '${name}' not found.\n` +
-        `Searched:\n` +
-        `  1. env HAKOBU_EXTERNAL_${toEnvName(name)}\n` +
-        `  2. ${path.join(this.execDir, 'externals', name)}\n` +
-        `  3. pattern: ${decl.pattern}\n` +
-        `Set the environment variable or place the artifact in one of these locations.`
-      );
+      throw externalNotFound(name, [
+        `env: HAKOBU_EXTERNAL_${toEnvName(name)}`,
+        path.join(this.execDir, 'externals', name),
+        `pattern: ${decl.pattern}`,
+      ]);
     }
 
     return null;

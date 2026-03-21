@@ -132,7 +132,7 @@
     - Make successful Windows handshake a gating test for Windows support
     - _Requirements: 6.2, 12.3_
 
-- [ ] 9. Implement native addon and external binary support
+- [x] 9. Implement native addon and external binary support
   - [x] 9.1 Add native addon classification and extraction
     - Detect `.node` modules during analysis
     - Extract them to a deterministic cache or temp path at runtime
@@ -145,9 +145,10 @@
     - _Requirements: 7.3, 9.2_
     - **Output:** `packages/hakobu/lib/external-artifacts.ts`
 
-  - [ ] 9.3 Improve diagnostics for addon and binary failures
+  - [x] 9.3 Improve diagnostics for addon and binary failures
     - Emit clear packaging and runtime errors with targeted remediation hints
     - _Requirements: 7.4, 9.3_
+    - **Output:** `packages/hakobu/lib/runtime-diagnostics.ts`
 
 - [ ] 10. Build the Hakobu CLI and programmatic API
   - [ ] 10.1 Implement the core package command
