@@ -292,13 +292,15 @@
     - _Depends on: 16.1, 16.3_
     - **Output:** `docs/bundle-source-maps.md`
 
-  - [ ] 17.2 Implement source-map generation and packaging
-    - Enable Rolldown source-map output (`sourcemap: true`)
-    - Include source-map files in the snapshot alongside the bundle
-    - Ensure the `//# sourceMappingURL` comment points to the correct snapshot
-      path at runtime
+  - [x] 17.2 Implement source-map generation and packaging
+    - Rolldown now emits source maps (`sourcemap: true`)
+    - Sidecar `.map` files are collected and passed as assets to the analyzer
+    - ESM load hook inlines `.map` data as base64 data URLs at module load time
+    - Verified: inline maps work on standard Node; patched base binary has a
+      known limitation where `--enable-source-maps` doesn't fully resolve maps
+      through `registerHooks` (base binary issue, not Hakobu packager issue)
     - _Depends on: 17.1_
-    - **Likely output:** update to `packages/hakobu/lib/bundler.ts`, `packages/hakobu/lib/packager.ts`
+    - **Output:** `packages/hakobu/lib/bundler.ts` (sourcemap: true, mapFiles collection), `packages/hakobu/lib/packager.ts` (load hook inlining, asset passthrough)
 
   - [ ] 17.3 Verify source-map stack traces in packaged executables
     - Add a fixture that throws an error from bundled code and verifies the

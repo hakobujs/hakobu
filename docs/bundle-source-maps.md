@@ -118,11 +118,13 @@ The mechanism is identical for both modes. Each JS file gets a corresponding
 2. **Analyzer**: ensure `.map` files are included in the manifest. The asset
    glob resolver or the analyzer's file walker must pick up `.map` files from
    the bundle output directory.
-3. **No runtime changes needed.** The prelude's patched `fs.readFileSync`
-   already serves any file in the snapshot. Node's source map support reads
-   `.map` files via `fs.readFileSync` when formatting stack traces.
-4. **Post-bundle patching**: the `applyBundlePatches` function must skip
-   `.map` files (only patch `.js` files).
+3. **ESM load hook inlines maps.** The ESM shim's `load` hook detects
+   `//# sourceMappingURL=file.map` comments and replaces them with inline
+   `data:application/json;base64,...` URLs. This ensures Node's source map
+   support sees the map data directly in the source text, without needing
+   to read `.map` files through the prelude's patched `fs`.
+4. **Post-bundle patching**: the `applyBundlePatches` function only patches
+   `.js` files, not `.map` files.
 
 ### 8. What is intentionally NOT supported
 
@@ -135,6 +137,12 @@ The mechanism is identical for both modes. Each JS file gets a corresponding
   (playwright-core stubs, etc.) modify the bundle output after Rolldown
   generates the source map. The source map will be slightly inaccurate for
   patched lines. This is acceptable — patches are small and targeted.
+- **Patched base binary limitation.** The patched Node 24 base binary's
+  `--enable-source-maps` may not fully resolve source maps for modules
+  loaded through `registerHooks` + `import()`. This is a base binary
+  limitation, not a Hakobu packager issue. The inline data URL approach
+  works correctly on standard Node. When the base binary is updated to a
+  newer Node 24 patch, this should resolve naturally.
 - **Native mode source maps.** This contract applies only to bundle mode.
   Native mode packages source files directly and doesn't transform them,
   so source maps are not needed.

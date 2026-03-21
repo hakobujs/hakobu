@@ -21,6 +21,8 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
 import { log } from './log';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -50,6 +52,18 @@ export interface BundleOutput {
 
   /** Warnings generated during bundling. */
   warnings: BundleWarning[];
+
+  /** How the final bundle was emitted. */
+  strategy: 'single-chunk' | 'code-split';
+
+  /** Number of emitted JavaScript chunks. */
+  chunkCount: number;
+
+  /** Why bundle mode fell back to single-chunk, if it did. */
+  fallbackReason?: string;
+
+  /** Source map files emitted alongside the bundle (relative to projectRoot). */
+  mapFiles: string[];
 
   /** Cleanup function to remove temp directory. */
   cleanup: () => void;
@@ -135,26 +149,12 @@ export class RolldownAdapter implements BundleAdapter {
         },
       });
 
-      // Single-chunk output ensures CJS-to-ESM __dirname/__filename polyfills
-      // apply everywhere. codeSplitting: false is the non-deprecated replacement
-      // for the old inlineDynamicImports: true output option.
-      // Banner provides module-level __dirname/__filename for CJS code
-      // that Rolldown inlines without polyfilling.
-      const result = await build.write({
-        dir: tmpDir,
-        format: 'esm',
-        entryFileNames: outFile,
-        sourcemap: false,
-        codeSplitting: false,
-        banner: [
-          `import{fileURLToPath as _hk_f}from'node:url';`,
-          `import{dirname as _hk_d}from'node:path';`,
-          `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`,
-        ].join(''),
-      });
+      const writeResult = await writeBundleOutput(build, tmpDir, outFile);
 
       // Post-bundle: apply compatibility patches for bundler-hostile packages
-      applyBundlePatches(path.join(tmpDir, outFile));
+      for (const file of writeResult.jsFiles) {
+        applyBundlePatches(file);
+      }
 
       // Create a minimal package.json for the bundled output
       const bundledPkg = {
@@ -168,17 +168,33 @@ export class RolldownAdapter implements BundleAdapter {
         JSON.stringify(bundledPkg, null, 2),
       );
 
-      const outSize = fs.statSync(path.join(tmpDir, outFile)).size;
-      log.info(`  output: ${(outSize / 1024).toFixed(0)}KB bundled`);
+      const outSize = writeResult.jsFiles.reduce(
+        (sum, file) => sum + fs.statSync(file).size,
+        0,
+      );
+      log.info(
+        `  output: ${(outSize / 1024).toFixed(0)}KB bundled ` +
+        `(${writeResult.strategy}, ${writeResult.chunkCount} chunk${writeResult.chunkCount === 1 ? '' : 's'})`,
+      );
+      if (writeResult.fallbackReason) {
+        log.info(`  fallback: ${writeResult.fallbackReason}`);
+      }
 
       if (warnings.length > 0) {
         log.warn(`  ${warnings.length} bundler warning(s)`);
       }
 
+      // Collect map file paths relative to tmpDir for asset inclusion
+      const relativeMapFiles = writeResult.mapFiles.map(f => path.relative(tmpDir, f));
+
       return {
         projectRoot: tmpDir,
         entry: outFile,
         warnings,
+        strategy: writeResult.strategy,
+        chunkCount: writeResult.chunkCount,
+        fallbackReason: writeResult.fallbackReason,
+        mapFiles: relativeMapFiles,
         cleanup: () => {
           try {
             fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -191,6 +207,135 @@ export class RolldownAdapter implements BundleAdapter {
       throw new Error(`Rolldown bundle failed: ${err.message}`);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Bundle writing + fallback detection
+// ─────────────────────────────────────────────────────────────────────
+
+interface WrittenBundle {
+  strategy: 'single-chunk' | 'code-split';
+  chunkCount: number;
+  fallbackReason?: string;
+  jsFiles: string[];
+  mapFiles: string[];
+}
+
+const MULTI_CHUNK_BANNER = [
+  `import{fileURLToPath as _hk_f}from'node:url';`,
+  `import{dirname as _hk_d}from'node:path';`,
+].join('');
+
+const SINGLE_CHUNK_BANNER = [
+  MULTI_CHUNK_BANNER,
+  `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`,
+].join('');
+
+async function writeBundleOutput(
+  build: any,
+  tmpDir: string,
+  outFile: string,
+): Promise<WrittenBundle> {
+  const splitResult = await writeBundle(build, tmpDir, outFile, true);
+  const unsafeReason = detectSingleChunkFallback(splitResult.jsFiles);
+  if (unsafeReason) {
+    resetBundleDir(tmpDir);
+    const singleResult = await writeBundle(build, tmpDir, outFile, false);
+    return {
+      strategy: 'single-chunk',
+      chunkCount: singleResult.jsFiles.length,
+      fallbackReason: unsafeReason,
+      jsFiles: singleResult.jsFiles,
+      mapFiles: singleResult.mapFiles,
+    };
+  }
+
+  return {
+    strategy: splitResult.jsFiles.length > 1 ? 'code-split' : 'single-chunk',
+    chunkCount: splitResult.jsFiles.length,
+    jsFiles: splitResult.jsFiles,
+    mapFiles: splitResult.mapFiles,
+  };
+}
+
+async function writeBundle(
+  build: any,
+  tmpDir: string,
+  outFile: string,
+  codeSplitting: boolean,
+): Promise<{ jsFiles: string[]; mapFiles: string[] }> {
+  await build.write({
+    dir: tmpDir,
+    format: 'esm',
+    entryFileNames: outFile,
+    chunkFileNames: 'chunks/[name]-[hash].js',
+    sourcemap: true,
+    codeSplitting,
+    banner: codeSplitting ? MULTI_CHUNK_BANNER : SINGLE_CHUNK_BANNER,
+  });
+
+  return listBundleFiles(tmpDir);
+}
+
+function listBundleFiles(rootDir: string): { jsFiles: string[]; mapFiles: string[] } {
+  const jsFiles: string[] = [];
+  const mapFiles: string[] = [];
+
+  function walk(dir: string): void {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+      } else if (entry.isFile()) {
+        if (/\.(?:m?js|cjs)$/.test(entry.name)) {
+          jsFiles.push(fullPath);
+        } else if (entry.name.endsWith('.map')) {
+          mapFiles.push(fullPath);
+        }
+      }
+    }
+  }
+
+  walk(rootDir);
+  jsFiles.sort();
+  mapFiles.sort();
+  return { jsFiles, mapFiles };
+}
+
+function resetBundleDir(tmpDir: string): void {
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  fs.mkdirSync(tmpDir, { recursive: true });
+}
+
+function detectSingleChunkFallback(jsFiles: string[]): string | null {
+  for (const file of jsFiles) {
+    const globals = findUnsafeNodePathGlobals(file);
+    if (globals.length > 0) {
+      return `${path.relative(path.dirname(file), file)} requires ${globals.join('/')} globals`;
+    }
+  }
+  return null;
+}
+
+function findUnsafeNodePathGlobals(filePath: string): string[] {
+  const code = fs.readFileSync(filePath, 'utf8');
+  const ast = parse(code, {
+    sourceType: 'module',
+    plugins: ['importMeta', 'topLevelAwait'],
+  });
+  const found = new Set<string>();
+
+  traverse(ast as any, {
+    Identifier(p: any) {
+      const name = p.node.name;
+      if (name !== '__dirname' && name !== '__filename') return;
+      if (!p.isReferencedIdentifier()) return;
+      if (p.scope.hasBinding(name)) return;
+      found.add(name);
+    },
+  });
+
+  return Array.from(found);
 }
 
 // ─────────────────────────────────────────────────────────────────────

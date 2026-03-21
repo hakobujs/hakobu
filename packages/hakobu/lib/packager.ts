@@ -92,7 +92,7 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
 
   // ── 0. Bundle mode (optional pre-processing) ──
   if (options.bundle) {
-    log.info('Bundling project (single-chunk, __dirname shimmed)...');
+    log.info('Bundling project...');
 
     const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
     const adapter = getAdapter(bundlerName);
@@ -124,7 +124,12 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
     // Switch to the bundled project for the rest of the pipeline
     projectRoot = bundleOutput.projectRoot;
     // Clear entry override — the bundle's package.json has the right main
-    options = { ...options, entry: undefined };
+    // Include source map files as assets so they end up in the snapshot
+    const bundleAssets = [
+      ...(options.assets || []),
+      ...bundleOutput.mapFiles,
+    ];
+    options = { ...options, entry: undefined, assets: bundleAssets.length > 0 ? bundleAssets : undefined };
   }
 
   try {
@@ -565,6 +570,23 @@ registerHooks({
       try {
         var source = fs.readFileSync(toNative(canonical), 'utf8');
         var format = getModuleFormat(canonical);
+        // Inline sidecar source maps so --enable-source-maps works in packaged mode.
+        // Node reads source maps from the source text, not from separate fs reads,
+        // when the map is a data: URL. This avoids depending on Node internals
+        // reading .map files through the prelude's patched fs.
+        var mapMatch = source.match(/\\/\\/# sourceMappingURL=([^\\n]+\\.map)\\s*$/);
+        if (mapMatch) {
+          var mapFile = mapMatch[1];
+          var mapCanonical = canonical.substring(0, canonical.lastIndexOf('/') + 1) + mapFile;
+          try {
+            var mapData = fs.readFileSync(toNative(mapCanonical), 'utf8');
+            var mapBase64 = Buffer.from(mapData).toString('base64');
+            source = source.replace(
+              mapMatch[0],
+              '//# sourceMappingURL=data:application/json;base64,' + mapBase64
+            );
+          } catch {}
+        }
         return { format: format, source: source, shortCircuit: true };
       } catch {}
     }
