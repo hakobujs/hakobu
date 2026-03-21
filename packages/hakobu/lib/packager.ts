@@ -83,7 +83,252 @@ export interface PackageResult {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Core package function
+// Multi-target packaging
+// ─────────────────────────────────────────────────────────────────────
+
+const ALL_TARGETS = [
+  'node24-linux-x64', 'node24-linux-arm64', 'node24-win-x64',
+  'node24-macos-arm64', 'node24-macos-x64', 'node24-linuxstatic-x64',
+];
+
+export interface PackageMultipleOptions {
+  projectRoot: string;
+  targets: string[];
+  outputDir?: string;
+  entry?: string;
+  assets?: string[];
+  externals?: string[];
+  bundle?: boolean | string;
+  bundleExternal?: string[];
+}
+
+export interface PackageMultipleResult {
+  target: { platform: string; arch: string; nodeRange: string };
+  status: 'success' | 'failed';
+  outputPath: string;
+  fileCount: number;
+  error?: string;
+}
+
+export async function packageMultiple(
+  options: PackageMultipleOptions,
+): Promise<PackageMultipleResult[]> {
+  const { projectRoot } = options;
+  const outputDir = path.resolve(options.outputDir || '.');
+
+  // Expand 'all' target
+  const targetSpecs = options.targets.flatMap(t =>
+    t === 'all' ? ALL_TARGETS : t.split(','),
+  ).filter(Boolean);
+
+  if (targetSpecs.length === 0) {
+    throw new Error('No targets specified.');
+  }
+
+  // Single target → delegate to packageApp for backward compat
+  if (targetSpecs.length === 1) {
+    const result = await packageApp({
+      ...options,
+      target: targetSpecs[0],
+      output: path.join(outputDir, defaultOutputName(
+        appIdFromProject(projectRoot),
+        parseTarget(targetSpecs[0]),
+      )),
+    });
+    return [{
+      target: result.target,
+      status: 'success',
+      outputPath: result.outputPath,
+      fileCount: result.fileCount,
+    }];
+  }
+
+  log.info(`Multi-target packaging: ${targetSpecs.length} targets`);
+
+  // ── Shared step: bundle (if requested) ──
+  let effectiveRoot = projectRoot;
+  let effectiveOptions = { ...options } as PackageOptions;
+  let bundleOutput: BundleOutput | null = null;
+
+  if (options.bundle) {
+    log.info('Bundling project (shared across all targets)...');
+    const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
+    const adapter = getAdapter(bundlerName);
+    const entry = options.entry || resolveEntryForBundle(projectRoot);
+    const appName = appIdFromProject(projectRoot);
+
+    bundleOutput = await adapter.bundle({
+      projectRoot, entry,
+      external: options.bundleExternal,
+      appName,
+    });
+
+    for (const w of bundleOutput.warnings) {
+      log.warn(`[bundle] ${w.message}`);
+    }
+
+    effectiveRoot = bundleOutput.projectRoot;
+    const bundleAssets = [
+      ...(options.assets || []),
+      ...bundleOutput.mapFiles,
+    ];
+    effectiveOptions = {
+      ...effectiveOptions,
+      entry: undefined,
+      assets: bundleAssets.length > 0 ? bundleAssets : undefined,
+    } as PackageOptions;
+  }
+
+  // ── Shared step: analyze ──
+  log.info('Analyzing project (shared across all targets)...');
+  const manifest = await analyze({
+    projectRoot: effectiveRoot,
+    entry: effectiveOptions.entry,
+    assets: effectiveOptions.assets,
+    externals: effectiveOptions.externals,
+  });
+
+  log.info(`  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`);
+  log.info(`  files: ${Object.keys(manifest.files).length}`);
+
+  // ── Per-target: fetch, pack, produce ──
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const results: PackageMultipleResult[] = [];
+  for (const spec of targetSpecs) {
+    const targetSpec = parseTarget(spec);
+    const outputName = defaultOutputName(manifest.appId, targetSpec);
+    const outputPath = path.join(outputDir, outputName);
+
+    log.info(`\n  [${targetSpec.platform}-${targetSpec.arch}]`);
+
+    try {
+      const result = await packageAppForTarget(
+        effectiveRoot, manifest, targetSpec, outputPath, effectiveOptions,
+      );
+      results.push({
+        target: targetSpec,
+        status: 'success',
+        outputPath: result.outputPath,
+        fileCount: result.fileCount,
+      });
+      log.info(`  OK  ${outputName}`);
+    } catch (err: any) {
+      results.push({
+        target: targetSpec,
+        status: 'failed',
+        outputPath,
+        fileCount: 0,
+        error: err.message,
+      });
+      log.error(`  FAIL  ${outputName}: ${err.message}`);
+    }
+  }
+
+  // Clean up bundle
+  if (bundleOutput) bundleOutput.cleanup();
+
+  // Summary
+  const ok = results.filter(r => r.status === 'success').length;
+  const fail = results.filter(r => r.status === 'failed').length;
+  log.info(`\n${ok} succeeded, ${fail} failed`);
+
+  return results;
+}
+
+/**
+ * Package a single target using a pre-analyzed manifest.
+ * This is the per-target inner loop for multi-target packaging.
+ */
+async function packageAppForTarget(
+  projectRoot: string,
+  manifest: PackagingManifest,
+  targetSpec: { nodeRange: string; platform: string; arch: string },
+  outputPath: string,
+  options: PackageOptions,
+): Promise<PackageResult> {
+  // Fetch base binary
+  const binaryPath = await need({
+    nodeRange: targetSpec.nodeRange,
+    platform: targetSpec.platform,
+    arch: targetSpec.arch,
+  });
+
+  // Strip macOS code signature
+  let effectiveBinaryPath = binaryPath;
+  if (targetSpec.platform === 'macos') {
+    const stripped = binaryPath + '.unsigned';
+    fs.copyFileSync(binaryPath, stripped);
+    try {
+      execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
+    } catch {}
+    effectiveBinaryPath = stripped;
+  }
+
+  // Build payload
+  const { records, entrypoint, symLinks } = manifestToRecords(manifest);
+  const slash = targetSpec.platform === 'win' ? '\\' : '/';
+  const backpack = packer({ records, entrypoint, bytecode: false, symLinks });
+
+  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+
+  const target: Target = {
+    nodeRange: targetSpec.nodeRange,
+    platform: targetSpec.platform as any,
+    arch: targetSpec.arch,
+    binaryPath: effectiveBinaryPath,
+    output: path.resolve(outputPath),
+    fabricator: {
+      nodeRange: targetSpec.nodeRange,
+      platform: system.hostPlatform as any,
+      arch: system.hostArch,
+      binaryPath: process.execPath,
+      output: '',
+      fabricator: null as any,
+    },
+  };
+
+  await producer({
+    backpack, bakes: [], slash, target, symLinks,
+    doCompress: CompressType.None, nativeBuild: false,
+  });
+
+  // Post-production
+  if (targetSpec.platform !== 'win') {
+    if (targetSpec.platform === 'macos') {
+      const buf = patchMachOExecutable(fs.readFileSync(target.output));
+      fs.writeFileSync(target.output, buf);
+      try { signMachOExecutable(target.output); } catch {}
+    }
+    await plusx(target.output);
+  }
+
+  return {
+    outputPath: path.resolve(outputPath),
+    manifest,
+    fileCount: Object.keys(manifest.files).length,
+    target: targetSpec,
+  };
+}
+
+function appIdFromProject(projectRoot: string): string {
+  const pkgJsonPath = path.join(projectRoot, 'package.json');
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+      return pkg.name || 'app';
+    } catch {}
+  }
+  return 'app';
+}
+
+function defaultOutputName(appId: string, target: { platform: string; arch: string }): string {
+  const ext = target.platform === 'win' ? '.exe' : '';
+  return `${appId}-${target.platform}-${target.arch}${ext}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Core package function (single target — unchanged)
 // ─────────────────────────────────────────────────────────────────────
 
 export async function packageApp(options: PackageOptions): Promise<PackageResult> {

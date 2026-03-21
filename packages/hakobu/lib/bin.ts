@@ -5,7 +5,7 @@ import path from 'path';
 import minimist from 'minimist';
 
 import { log } from './log';
-import { packageApp } from './packager';
+import { packageApp, packageMultiple } from './packager';
 import { commandTargets, commandInspect, commandDoctor } from './commands';
 import { normalizeConfig } from './config';
 import type { ConfigWarning } from './config';
@@ -24,7 +24,8 @@ Usage:
   hakobu doctor <project-root> [--target]   Check if a project is ready to package
 
 Options:
-  --target <spec>     Target (e.g., node24-macos-arm64). Default: host
+  --target <spec>     Target(s), comma-separated (e.g., node24-linux-x64,node24-win-x64)
+                      Use 'all' for all published targets. Default: host
   --output <path>     Output executable path
   --entry <file>      Entry file (relative to project root)
   --help, -h          Show this help
@@ -137,7 +138,26 @@ async function main() {
         process.exit(1);
       }
 
-      await packageApp(options);
+      // Detect multi-target: comma-separated --target or 'all'
+      const targetStr = options.target || '';
+      const isMulti = targetStr.includes(',') || targetStr === 'all';
+
+      if (isMulti) {
+        const results = await packageMultiple({
+          projectRoot: options.projectRoot,
+          targets: [targetStr],
+          outputDir: options.output,
+          entry: options.entry,
+          assets: options.assets,
+          externals: options.externals,
+          bundle: options.bundle,
+          bundleExternal: options.bundleExternal,
+        });
+        const failed = results.filter(r => r.status === 'failed');
+        if (failed.length > 0) process.exit(1);
+      } else {
+        await packageApp(options);
+      }
       break;
     }
   }

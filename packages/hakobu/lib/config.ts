@@ -27,7 +27,10 @@ export interface HakobuConfig {
   /** Target specification string (e.g., 'node24-linux-x64'). */
   target?: string;
 
-  /** Output executable path. */
+  /** Multiple targets (e.g., ['node24-linux-x64', 'node24-win-x64']). */
+  targets?: string[];
+
+  /** Output executable path (single target) or directory (multi-target). */
   output?: string;
 
   /** Asset glob patterns to include. */

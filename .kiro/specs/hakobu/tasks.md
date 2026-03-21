@@ -329,10 +329,11 @@
     - _Depends on: 10.1, 10.3_
     - **Output:** `docs/multi-target.md`
 
-  - [ ] 18.2 Reuse analysis and bundle across targets
-    - Run the analyzer and bundler once, then produce executables for each
-      target from the same manifest/bundle output
-    - Fetch base binaries in parallel where possible
+  - [x] 18.2 Reuse analysis and bundle across targets
+    - `packageMultiple()` bundles once, analyzes once, then runs per-target
+      binary injection (fetch base, pack, produce, sign)
+    - CLI detects comma-separated `--target` or `all` and routes to multi-target
+    - Single-target backward compatibility preserved
     - _Depends on: 18.1, 11.2_
     - **Likely output:** update to `packages/hakobu/lib/packager.ts`
 
