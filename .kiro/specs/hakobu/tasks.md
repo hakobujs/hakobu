@@ -251,3 +251,81 @@
     - _Requirements: 6.2, 12.2, 12.3, 12.4_
     - **Output:** `docs/v1-release-criteria.md` Sections 3–7 (CI gates, executable proof, checklist)
 
+# ─────────────────────────────────────────────────────────────────────
+# Post-v1 Roadmap
+# ─────────────────────────────────────────────────────────────────────
+
+- [ ] 16. Harden bundle mode
+  - [ ] 16.1 Replace deprecated `inlineDynamicImports` with stable Rolldown API
+    - Track Rolldown's migration from `inlineDynamicImports` to a stable
+      code-splitting control option
+    - Switch when the replacement is available without breaking the single-chunk
+      `__dirname`/`__filename` polyfill guarantee
+    - _Depends on: Rolldown API stabilization (external)_
+
+  - [ ] 16.2 Add a bundler-hostile package registry
+    - Replace the current regex-based post-bundle patching with a declarative
+      registry of known bundler-hostile patterns and their fixes
+    - Cover at least: playwright-core, esbuild, prisma, sharp
+    - Allow user-defined patch entries via config if needed
+    - _Depends on: 11.2_
+    - **Likely output:** `packages/hakobu/lib/bundle-patches.ts`
+
+  - [ ] 16.3 Support code-split bundle output
+    - Allow Rolldown to produce multiple chunks when `inlineDynamicImports` is
+      not needed (i.e., when the project does not use CJS-origin `__dirname`)
+    - Inject per-chunk `__dirname`/`__filename` polyfills only where needed
+    - Fall back to single-chunk mode when CJS `__dirname` usage is detected
+    - Add a fixture that validates code-split packaged output loads correctly
+    - _Depends on: 16.1_
+    - **Likely output:** update to `packages/hakobu/lib/bundler.ts`, new fixture
+
+- [ ] 17. Bundle-mode source maps
+  - [ ] 17.1 Define the bundled source-map contract
+    - Decide where source maps are stored in the snapshot (inline vs sidecar)
+    - Define how `Error.stack` and `--enable-source-maps` interact with
+      bundled snapshot paths
+    - Document what is and is not mapped (original TS line → bundle line →
+      snapshot path)
+    - _Depends on: 16.1, 16.3_
+    - **Likely output:** `docs/bundle-source-maps.md`
+
+  - [ ] 17.2 Implement source-map generation and packaging
+    - Enable Rolldown source-map output (`sourcemap: true`)
+    - Include source-map files in the snapshot alongside the bundle
+    - Ensure the `//# sourceMappingURL` comment points to the correct snapshot
+      path at runtime
+    - _Depends on: 17.1_
+    - **Likely output:** update to `packages/hakobu/lib/bundler.ts`, `packages/hakobu/lib/packager.ts`
+
+  - [ ] 17.3 Verify source-map stack traces in packaged executables
+    - Add a fixture that throws an error from bundled code and verifies the
+      stack trace maps back to the original source file and line
+    - Test on at least macOS and Linux
+    - _Depends on: 17.2_
+    - **Likely output:** new fixture in `fixtures/`
+
+- [ ] 18. Multi-target packaging
+  - [ ] 18.1 Design the multi-target CLI and API
+    - Support `--target node24-linux-x64,node24-win-x64,node24-macos-arm64`
+      or equivalent multi-value syntax
+    - Define output naming: `{name}-{platform}-{arch}` with `.exe` for Windows
+    - Define how `--output` interacts with multiple targets (output directory
+      vs output template)
+    - _Depends on: 10.1, 10.3_
+    - **Likely output:** update to `packages/hakobu/lib/bin.ts`, `packages/hakobu/lib/packager.ts`
+
+  - [ ] 18.2 Reuse analysis and bundle across targets
+    - Run the analyzer and bundler once, then produce executables for each
+      target from the same manifest/bundle output
+    - Fetch base binaries in parallel where possible
+    - _Depends on: 18.1, 11.2_
+    - **Likely output:** update to `packages/hakobu/lib/packager.ts`
+
+  - [ ] 18.3 Add multi-target verification and output reporting
+    - Report per-target packaging results (success/failure, output path, size)
+    - Add a CI fixture or test that packages a simple project for 2+ targets
+      in one invocation
+    - _Depends on: 18.2_
+    - **Likely output:** update to `packages/hakobu/lib/commands.ts`, new fixture
+
