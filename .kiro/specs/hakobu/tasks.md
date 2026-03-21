@@ -112,7 +112,7 @@
     - _Requirements: 4.3, 4.4, 14.2_
 
 - [ ] 8. Restore child-process, fork, and worker semantics
-  - [ ] 8.1 Validate raw `spawn` and `exec` behavior from packaged executables
+  - [x] 8.1 Validate raw `spawn` and `exec` behavior from packaged executables
     - Cover custom `stdio` arrays, descriptor inheritance, and environment flow
     - _Requirements: 6.1, 12.1, 12.3_
 
