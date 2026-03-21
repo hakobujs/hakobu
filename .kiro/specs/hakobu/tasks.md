@@ -209,14 +209,16 @@
     - _Requirements: 11.1, 12.1_
     - **Output:** `.github/workflows/ci.yml` — 4 jobs (fast, fixtures-macos, fixtures-linux, windows-smoke)
 
-  - [ ] 13.2 Build patched-base release workflows
+  - [x] 13.2 Build patched-base release workflows
     - Build and publish Node 24 patched bases with checksums and provenance
     - _Requirements: 2.1, 11.2, 11.3, 13.2_
+    - **Output:** `.github/workflows/build-bases.yml` (completed in Task 3)
 
-  - [ ] 13.3 Build final release workflows for Hakobu
+  - [x] 13.3 Build final release workflows for Hakobu
     - Publish package releases and GitHub Release artifacts for supported
       targets
     - _Requirements: 10.1, 10.2, 11.2, 11.3_
+    - **Output:** `.github/workflows/release.yml` — tag/manual trigger, validate → fixtures → npm publish → GitHub Release
 
 - [ ] 14. Ship migration and maintenance documentation
   - [ ] 14.1 Write migration guides from `pkg` and `yao-pkg`
