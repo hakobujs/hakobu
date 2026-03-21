@@ -24,6 +24,7 @@ import fs from 'fs';
 import Module from 'module';
 import { SnapshotFS, isSnapshotPath, toNative } from './snapshot-fs';
 import { toCanonical } from './snapshot-path';
+import { extractAddon } from './addon-extract';
 
 // ─────────────────────────────────────────────────────────────────────
 // Path coercion (Node passes string | Buffer | URL)
@@ -307,6 +308,13 @@ export function patchFS(sfs: SnapshotFS): () => void {
     }
 
     if (resolved) {
+      // Native addons (.node) cannot be loaded from the snapshot via
+      // dlopen() — they must exist as real files. Extract to the
+      // deterministic cache and return the extracted path.
+      if (resolved.endsWith('.node') && isSnapshotPath(resolved)) {
+        const extracted = extractAddon(resolved, sfs);
+        return extracted.extractedPath;
+      }
       return resolved;
     }
 
