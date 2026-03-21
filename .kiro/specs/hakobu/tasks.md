@@ -139,10 +139,11 @@
     - _Requirements: 7.1, 7.2, 13.3_
     - **Output:** `packages/hakobu/lib/addon-extract.ts`
 
-  - [ ] 9.2 Add external artifact declarations
+  - [x] 9.2 Add external artifact declarations
     - Support explicit externals for browsers, helper binaries, and large assets
     - Provide runtime helpers for locating declared external artifacts
     - _Requirements: 7.3, 9.2_
+    - **Output:** `packages/hakobu/lib/external-artifacts.ts`
 
   - [ ] 9.3 Improve diagnostics for addon and binary failures
     - Emit clear packaging and runtime errors with targeted remediation hints
