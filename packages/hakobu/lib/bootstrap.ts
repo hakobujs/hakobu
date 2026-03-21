@@ -11,6 +11,7 @@
  */
 
 import { register } from 'node:module';
+import Module from 'node:module';
 import { pathToFileURL } from 'node:url';
 
 import type { SnapshotFS } from './snapshot-fs';
@@ -84,8 +85,15 @@ async function bootstrapESM(
       transferList: [transferData.blob],
     });
 
+    // Pre-cache all CJS modules from the snapshot in Node's module
+    // cache. This is needed because Node 24's CJS translator creates
+    // its own require() that doesn't go through the hooks for nested
+    // CJS requires. By pre-caching, require() finds the module in
+    // cache and skips the file-existence validation.
+    preloadCJSModules(sfs);
+
     // Now import the entry. The registered hooks will handle
-    // resolution and loading for snapshot modules.
+    // resolution and loading for ESM snapshot modules.
     //
     // Use Function constructor to get the real import() that goes
     // through the ESM loader, not TypeScript's CJS-compiled require().
@@ -166,6 +174,51 @@ function buildHookTransferData(sfs: SnapshotFS): HookTransferData {
     appId: index.appId,
     directories,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CJS preloading
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Pre-populate Node's CJS module cache for all CJS/JSON files in the
+ * snapshot. This ensures that require() from within hooks-loaded CJS
+ * modules finds the module in cache without trying to read from disk.
+ */
+function preloadCJSModules(sfs: SnapshotFS) {
+  const index = (sfs as any).index as SnapshotIndex;
+
+  for (const entry of index.entries) {
+    // Only preload CJS scripts and JSON files
+    if (entry.kind !== 'script' && entry.kind !== 'json' && entry.kind !== 'package-json') continue;
+    if (entry.format === 'esm') continue; // ESM modules are handled by hooks
+
+    const filename = toNative(entry.path);
+
+    // Skip if already cached
+    if ((Module as any)._cache[filename]) continue;
+
+    const mod = new (Module as any)(filename, null);
+    mod.filename = filename;
+    mod.paths = (Module as any)._nodeModulePaths(
+      filename.substring(0, filename.lastIndexOf('/'))
+    );
+
+    try {
+      const content = sfs.readFileSync(entry.path).toString('utf8');
+
+      if (entry.kind === 'json' || entry.kind === 'package-json') {
+        mod.exports = JSON.parse(content);
+      } else {
+        mod._compile(content, filename);
+      }
+
+      mod.loaded = true;
+      (Module as any)._cache[filename] = mod;
+    } catch {
+      // Skip modules that fail to compile (they'll error at require time)
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────

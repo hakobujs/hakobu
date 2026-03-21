@@ -77,7 +77,7 @@
     - _Requirements: 5.2, 5.4, 10.3, 12.1_
     - **Output:** `packages/hakobu/lib/snapshot-path.ts` (49 tests passing)
 
-- [ ] 6. Implement native ESM runtime support
+- [x] 6. Implement native ESM runtime support
   - [x] 6.1 Build the ESM bootstrap and entry loader
     - Start ES module entrypoints directly from the packaged runtime
     - Register Node 24 module hooks before loading the user entrypoint
@@ -95,7 +95,7 @@
     - Preserve useful stack traces and source-map resolution paths
     - _Requirements: 3.4, 5.2, 12.2_
 
-  - [ ] 6.4 Validate mixed-module interop
+  - [x] 6.4 Validate mixed-module interop
     - Support `createRequire()` from ESM and Node-consistent interop behavior
     - Verify mixed graphs against unpackaged execution results
     - _Requirements: 3.5, 4.3, 12.2_

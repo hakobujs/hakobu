@@ -219,6 +219,21 @@ export function initialize(data) {
   dirSet = new Set(data.directories);
 }
 
+// In Node 24+, hooks handle both ESM and CJS resolution.
+// For ESM: shortCircuit and let the load hook provide source.
+// For CJS nested requires (context.conditions includes 'require'):
+//   let nextResolve fall through to Module._resolveFilename + _compile
+//   patches on the main thread, which can read from the snapshot.
+// For CJS imported by ESM (top-level): shortCircuit so the load hook
+//   provides the source to the ESM translator.
+function maybeShortCircuit(url, format, nextResolve, specifier, context) {
+  if (format === 'commonjs' && context.conditions && context.conditions.includes('require')) {
+    // Nested CJS require — let the main thread's _resolveFilename handle it
+    return nextResolve(specifier, context);
+  }
+  return { url, shortCircuit: true, format };
+}
+
 export function resolve(specifier, context, nextResolve) {
   if (isBuiltin(specifier)) {
     return nextResolve(specifier, context);
@@ -232,7 +247,7 @@ export function resolve(specifier, context, nextResolve) {
     if (specifier.startsWith('file:///snapshot/')) {
       const snapPath = urlToPath(specifier);
       if (snapPath && isFile(snapPath)) {
-        return { url: specifier, shortCircuit: true, format: getFormat(snapPath) };
+        return maybeShortCircuit(specifier, getFormat(snapPath), nextResolve, specifier, context);
       }
     }
     return nextResolve(specifier, context);
@@ -256,7 +271,7 @@ export function resolve(specifier, context, nextResolve) {
             const fullPath = canonicalize(pkg.directory + '/' + resolved);
             const fileResolved = tryFile(fullPath);
             if (fileResolved) {
-              return { url: pathToUrl(fileResolved), shortCircuit: true, format: getFormat(fileResolved) };
+              return maybeShortCircuit(pathToUrl(fileResolved), getFormat(fileResolved), nextResolve, specifier, context);
             }
           }
         }
@@ -272,7 +287,7 @@ export function resolve(specifier, context, nextResolve) {
     if (!target.startsWith('/snapshot/')) return nextResolve(specifier, context);
     const resolved = tryFile(target);
     if (resolved) {
-      return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
+      return maybeShortCircuit(pathToUrl(resolved), getFormat(resolved), nextResolve, specifier, context);
     }
     throw new Error(
       'Cannot find module \\'' + specifier + '\\' imported from ' + parentUrl
@@ -312,7 +327,7 @@ export function resolve(specifier, context, nextResolve) {
           const fullPath = canonicalize(nmDir + '/' + resolved);
           const fileResolved = tryFile(fullPath);
           if (fileResolved) {
-            return { url: pathToUrl(fileResolved), shortCircuit: true, format: getFormat(fileResolved) };
+            return maybeShortCircuit(pathToUrl(fileResolved), getFormat(fileResolved), nextResolve, specifier, context);
           }
         }
         // exports present but couldn't resolve — do NOT fall back
@@ -324,17 +339,17 @@ export function resolve(specifier, context, nextResolve) {
         if (pkgPj?.main) {
           const resolved = tryFile(canonicalize(nmDir + '/' + pkgPj.main));
           if (resolved) {
-            return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
+            return maybeShortCircuit(pathToUrl(resolved), getFormat(resolved), nextResolve, specifier, context);
           }
         }
         const resolved = tryFile(nmDir + '/index');
         if (resolved) {
-          return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
+          return maybeShortCircuit(pathToUrl(resolved), getFormat(resolved), nextResolve, specifier, context);
         }
       } else {
         const resolved = tryFile(canonicalize(nmDir + '/' + subpath.slice(2)));
         if (resolved) {
-          return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
+          return maybeShortCircuit(pathToUrl(resolved), getFormat(resolved), nextResolve, specifier, context);
         }
       }
       return nextResolve(specifier, context);
