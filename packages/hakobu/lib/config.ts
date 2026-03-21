@@ -1,0 +1,364 @@
+/**
+ * Hakobu Configuration Normalization
+ *
+ * Reads packaging config from:
+ *   1. CLI flags (highest priority)
+ *   2. package.json "hakobu" field (modern)
+ *   3. package.json "pkg" field (legacy — accepted with warnings)
+ *
+ * All inputs are normalized into PackageOptions for the packaging pipeline.
+ * Legacy `pkg` options are mapped where safe, warned where changed, and
+ * rejected where unsupported.
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { log } from './log';
+import type { PackageOptions } from './packager';
+
+// ─────────────────────────────────────────────────────────────────────
+// Modern config shape (package.json "hakobu" field)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface HakobuConfig {
+  /** Entry file relative to project root. */
+  entry?: string;
+
+  /** Target specification string (e.g., 'node24-linux-x64'). */
+  target?: string;
+
+  /** Output executable path. */
+  output?: string;
+
+  /** Asset glob patterns to include. */
+  assets?: string[];
+
+  /** External artifact names (kept outside the executable). */
+  externals?: string[];
+
+  /** Bundle mode: true, 'rolldown', or false/undefined. */
+  bundle?: boolean | string;
+
+  /** Modules to keep external when bundling. */
+  bundleExternal?: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Legacy config shape (package.json "pkg" field)
+// ─────────────────────────────────────────────────────────────────────
+
+interface LegacyPkgConfig {
+  scripts?: string[];
+  assets?: string[];
+  targets?: string[];
+  outputPath?: string;
+  // Unsupported legacy options — detected and rejected
+  patches?: unknown;
+  dictionary?: unknown;
+  deployFiles?: unknown;
+  ignore?: unknown;
+  log?: unknown;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CLI args shape (from minimist)
+// ─────────────────────────────────────────────────────────────────────
+
+export interface CliArgs {
+  projectRoot: string;
+  entry?: string;
+  target?: string;
+  output?: string;
+  bundle?: boolean | string;
+  external?: string | string[];
+  // Legacy CLI aliases
+  targets?: string;
+  config?: string;
+  'out-path'?: string;
+  outdir?: string;
+  'out-dir'?: string;
+  'no-bytecode'?: boolean;
+  compress?: string;
+  build?: boolean;
+  public?: boolean;
+  'public-packages'?: string;
+  sea?: boolean;
+  options?: string;
+  'no-native-build'?: boolean;
+  'no-dict'?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Config warnings
+// ─────────────────────────────────────────────────────────────────────
+
+export interface ConfigWarning {
+  type: 'migrated' | 'deprecated' | 'unsupported';
+  option: string;
+  message: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Normalization result
+// ─────────────────────────────────────────────────────────────────────
+
+export interface NormalizedConfig {
+  options: PackageOptions;
+  warnings: ConfigWarning[];
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Main normalization function
+// ─────────────────────────────────────────────────────────────────────
+
+export function normalizeConfig(args: CliArgs): NormalizedConfig {
+  const warnings: ConfigWarning[] = [];
+  const projectRoot = path.resolve(args.projectRoot);
+
+  // ── Read package.json ──
+  const pkgJsonPath = path.join(projectRoot, 'package.json');
+  let hakobuConfig: HakobuConfig | undefined;
+  let legacyConfig: LegacyPkgConfig | undefined;
+
+  if (fs.existsSync(pkgJsonPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'));
+
+      if (pkg.hakobu) {
+        hakobuConfig = pkg.hakobu;
+      }
+
+      if (pkg.pkg) {
+        if (hakobuConfig) {
+          warnings.push({
+            type: 'deprecated',
+            option: 'pkg',
+            message: 'Both "hakobu" and "pkg" fields found in package.json. Using "hakobu"; ignoring "pkg".',
+          });
+        } else {
+          legacyConfig = pkg.pkg;
+          warnings.push({
+            type: 'migrated',
+            option: 'pkg',
+            message: 'Reading config from "pkg" field. Migrate to "hakobu" field for future compatibility.',
+          });
+        }
+      }
+    } catch { /* invalid package.json — analyzer will handle this */ }
+  }
+
+  // ── Handle legacy --config / -c flag ──
+  if (args.config) {
+    warnings.push({
+      type: 'deprecated',
+      option: '--config',
+      message: '--config is deprecated. Put config in the "hakobu" field of package.json instead.',
+    });
+  }
+
+  // ── Reject unsupported legacy CLI flags ──
+  checkUnsupportedCliFlag(args, 'no-bytecode', warnings);
+  checkUnsupportedCliFlag(args, 'compress', warnings);
+  checkUnsupportedCliFlag(args, 'public', warnings);
+  checkUnsupportedCliFlag(args, 'public-packages', warnings);
+  checkUnsupportedCliFlag(args, 'sea', warnings);
+  checkUnsupportedCliFlag(args, 'options', warnings);
+  checkUnsupportedCliFlag(args, 'no-native-build', warnings);
+  checkUnsupportedCliFlag(args, 'no-dict', warnings);
+  checkUnsupportedCliFlag(args, 'build', warnings);
+
+  // ── Handle legacy --out-path / --outdir ──
+  let legacyOutputPath: string | undefined;
+  const outPathValue = args['out-path'] || args.outdir || args['out-dir'];
+  if (outPathValue) {
+    warnings.push({
+      type: 'migrated',
+      option: '--out-path',
+      message: '--out-path is accepted. Use --output with a full path in new projects.',
+    });
+    legacyOutputPath = String(outPathValue);
+  }
+
+  // ── Handle legacy --targets (comma-separated, plural) ──
+  let legacyTarget: string | undefined;
+  if (args.targets) {
+    const targetList = String(args.targets).split(',').filter(Boolean);
+    if (targetList.length > 1) {
+      warnings.push({
+        type: 'deprecated',
+        option: '--targets',
+        message: 'Multi-target builds are not supported. Hakobu builds one target at a time. Using the first target.',
+      });
+    }
+    if (targetList.length > 0) {
+      legacyTarget = targetList[0];
+      warnings.push({
+        type: 'migrated',
+        option: '--targets',
+        message: '--targets is accepted. Use --target (singular) in new projects.',
+      });
+    }
+  }
+
+  // ── Normalize legacy pkg config ──
+  const fromLegacy = legacyConfig ? normalizeLegacy(legacyConfig, warnings) : {};
+
+  // ── Normalize modern hakobu config ──
+  const fromModern = hakobuConfig || {};
+
+  // ── Merge: CLI > modern config > legacy config ──
+  // CLI flags take highest priority, then modern "hakobu" field, then legacy "pkg" field.
+  const source = hakobuConfig ? fromModern : fromLegacy;
+
+  const entry = args.entry || source.entry;
+  const target = args.target || legacyTarget || source.target;
+  const output = resolveOutput(args.output, legacyOutputPath, source.output);
+  const assets = source.assets;
+  const externals = source.externals;
+
+  // Bundle mode
+  let bundle: boolean | string | undefined;
+  if (args.bundle === true || args.bundle === '') {
+    bundle = true;
+  } else if (typeof args.bundle === 'string') {
+    bundle = args.bundle;
+  } else {
+    bundle = source.bundle;
+  }
+
+  let bundleExternal: string[] | undefined;
+  if (args.external) {
+    bundleExternal = Array.isArray(args.external) ? args.external : [String(args.external)];
+  } else {
+    bundleExternal = source.bundleExternal;
+  }
+
+  return {
+    options: {
+      projectRoot,
+      entry,
+      target,
+      output,
+      assets,
+      externals,
+      bundle,
+      bundleExternal,
+    },
+    warnings,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Legacy normalization
+// ─────────────────────────────────────────────────────────────────────
+
+function normalizeLegacy(
+  legacy: LegacyPkgConfig,
+  warnings: ConfigWarning[],
+): Partial<HakobuConfig> {
+  const result: Partial<HakobuConfig> = {};
+
+  // pkg.scripts → mapped to assets (they were extra files to include)
+  if (legacy.scripts && legacy.scripts.length > 0) {
+    warnings.push({
+      type: 'migrated',
+      option: 'pkg.scripts',
+      message: '"pkg.scripts" mapped to "hakobu.assets". In Hakobu, use "assets" for extra files to include.',
+    });
+    result.assets = [...(legacy.assets || []), ...legacy.scripts];
+  } else if (legacy.assets && legacy.assets.length > 0) {
+    result.assets = legacy.assets;
+  }
+
+  // pkg.targets → take the first one
+  if (legacy.targets && legacy.targets.length > 0) {
+    if (legacy.targets.length > 1) {
+      warnings.push({
+        type: 'deprecated',
+        option: 'pkg.targets',
+        message: 'Multi-target "pkg.targets" not supported. Hakobu builds one target at a time. Using the first.',
+      });
+    }
+    result.target = legacy.targets[0];
+  }
+
+  // pkg.outputPath → output
+  if (legacy.outputPath) {
+    result.output = legacy.outputPath;
+  }
+
+  // Reject unsupported legacy config fields
+  if (legacy.patches) {
+    warnings.push({
+      type: 'unsupported',
+      option: 'pkg.patches',
+      message: '"pkg.patches" is not supported. Hakobu does not support source patching during packaging.',
+    });
+  }
+
+  if (legacy.dictionary) {
+    warnings.push({
+      type: 'unsupported',
+      option: 'pkg.dictionary',
+      message: '"pkg.dictionary" is not supported. Hakobu resolves dependencies from the project directly.',
+    });
+  }
+
+  if (legacy.deployFiles) {
+    warnings.push({
+      type: 'unsupported',
+      option: 'pkg.deployFiles',
+      message: '"pkg.deployFiles" is not supported. Use "hakobu.assets" for extra files, or "hakobu.externals" for external binaries.',
+    });
+  }
+
+  if (legacy.ignore) {
+    warnings.push({
+      type: 'unsupported',
+      option: 'pkg.ignore',
+      message: '"pkg.ignore" is not supported. Hakobu includes only files reachable from the entry point.',
+    });
+  }
+
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
+
+function resolveOutput(
+  cliOutput?: string,
+  legacyOutputPath?: string,
+  configOutput?: string,
+): string | undefined {
+  if (cliOutput) return cliOutput;
+  if (configOutput) return configOutput;
+  if (legacyOutputPath) return legacyOutputPath;
+  return undefined;
+}
+
+function checkUnsupportedCliFlag(
+  args: Record<string, any>,
+  flag: string,
+  warnings: ConfigWarning[],
+): void {
+  if (args[flag] !== undefined && args[flag] !== false) {
+    const messages: Record<string, string> = {
+      'no-bytecode': '--no-bytecode is not needed. Hakobu always packages source (no bytecode).',
+      'compress': '--compress is not supported. Hakobu does not compress the snapshot payload.',
+      'public': '--public is not supported. Hakobu always includes source.',
+      'public-packages': '--public-packages is not supported. Hakobu always includes source.',
+      'sea': '--sea is not supported. Hakobu uses its own snapshot format, not Node SEA.',
+      'options': '--options (V8 flags) is not supported yet.',
+      'no-native-build': '--no-native-build is not needed. Hakobu does not prebuild native addons by default.',
+      'no-dict': '--no-dict is not supported. Hakobu does not use dictionaries.',
+      'build': '--build (force local build) is not supported via the Hakobu CLI. Base binaries are fetched from releases.',
+    };
+    warnings.push({
+      type: 'unsupported',
+      option: `--${flag}`,
+      message: messages[flag] || `--${flag} is not supported.`,
+    });
+  }
+}

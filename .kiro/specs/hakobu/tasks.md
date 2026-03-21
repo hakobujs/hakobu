@@ -162,10 +162,11 @@
     - _Requirements: 9.1, 9.3, 10.2_
     - **Output:** `packages/hakobu/lib/commands.ts`, `packages/hakobu/lib/bin.ts`
 
-  - [ ] 10.3 Normalize configuration and migration aliases
+  - [x] 10.3 Normalize configuration and migration aliases
     - Accept a modern config schema while preserving useful `pkg` aliases
     - Warn on changed or deprecated legacy options
     - _Requirements: 9.2, 14.1, 14.2_
+    - **Output:** `packages/hakobu/lib/config.ts`, 16-test suite in `test/test-config.js`
 
 - [ ] 11. Add optional bundle mode
   - [x] 11.1 Define bundle-mode plugin interface

@@ -7,6 +7,8 @@ import minimist from 'minimist';
 import { log } from './log';
 import { packageApp } from './packager';
 import { commandTargets, commandInspect, commandDoctor } from './commands';
+import { normalizeConfig } from './config';
+import type { ConfigWarning } from './config';
 
 const { version } = JSON.parse(
   readFileSync(path.join(__dirname, '../package.json'), 'utf-8'),
@@ -36,11 +38,33 @@ Bundle mode (optional — for TypeScript / monorepo projects):
   With --bundle, Rolldown compiles TS and resolves dependencies first.
   See docs/bundle-mode.md for semantic differences and caveats.
 
+Config:
+  Hakobu reads the "hakobu" field from package.json:
+    { "hakobu": { "entry": "src/index.js", "assets": ["templates/**"] } }
+
+  Legacy "pkg" config is accepted with migration warnings.
+  CLI flags override package.json config.
+
 Examples:
   hakobu ./my-app --output ./dist/app                    Native mode
   hakobu ./my-ts-app --bundle --output ./dist/app        Bundle mode
   hakobu ./app --bundle --entry src/cli.ts --external electron
 `.trim();
+
+function printConfigWarnings(warnings: ConfigWarning[]): boolean {
+  let hasUnsupported = false;
+  for (const w of warnings) {
+    if (w.type === 'unsupported') {
+      log.error(`[config] ${w.message}`);
+      hasUnsupported = true;
+    } else if (w.type === 'deprecated') {
+      log.warn(`[config] ${w.message}`);
+    } else {
+      log.info(`[config] ${w.message}`);
+    }
+  }
+  return hasUnsupported;
+}
 
 async function main() {
   if (process.env.CHDIR && process.env.CHDIR !== process.cwd()) {
@@ -48,9 +72,13 @@ async function main() {
   }
 
   const argv = minimist(process.argv.slice(2), {
-    string: ['target', 'output', 'entry', 'external'],
-    boolean: ['help', 'version'],
-    alias: { h: 'help', v: 'version', o: 'output', t: 'target' },
+    string: ['target', 'targets', 'output', 'entry', 'external', 'config',
+             'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
+             'options', 'no-dict'],
+    boolean: ['help', 'version', 'no-bytecode', 'build', 'public', 'sea',
+              'no-native-build'],
+    alias: { h: 'help', v: 'version', o: 'output', t: 'target',
+             c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
 
   if (argv.version) {
@@ -79,31 +107,37 @@ async function main() {
       break;
 
     default: {
-      // Default: treat the first arg as a project root to package
-      const projectRoot = path.resolve(command);
-
-      // Parse --bundle flag: --bundle (true/rolldown), --bundle=rolldown
-      let bundle: boolean | string | undefined;
-      if (argv.bundle === true || argv.bundle === '') {
-        bundle = true;
-      } else if (typeof argv.bundle === 'string') {
-        bundle = argv.bundle;
-      }
-
-      // Parse --external: can be string or array
-      let bundleExternal: string[] | undefined;
-      if (argv.external) {
-        bundleExternal = Array.isArray(argv.external) ? argv.external : [argv.external];
-      }
-
-      await packageApp({
-        projectRoot,
+      const { options, warnings } = normalizeConfig({
+        projectRoot: path.resolve(command),
         entry: argv.entry,
         target: argv.target,
         output: argv.output,
-        bundle,
-        bundleExternal,
+        bundle: argv.bundle,
+        external: argv.external,
+        // Legacy aliases
+        targets: argv.targets,
+        config: argv.config,
+        'out-path': argv['out-path'],
+        outdir: argv.outdir,
+        'out-dir': argv['out-dir'],
+        'no-bytecode': argv['no-bytecode'],
+        compress: argv.compress,
+        build: argv.build,
+        public: argv.public,
+        'public-packages': argv['public-packages'],
+        sea: argv.sea,
+        options: argv.options,
+        'no-native-build': argv['no-native-build'],
+        'no-dict': argv['no-dict'],
       });
+
+      const hasUnsupported = printConfigWarnings(warnings);
+      if (hasUnsupported) {
+        log.error('Unsupported options detected. Remove them or see migration guidance above.');
+        process.exit(1);
+      }
+
+      await packageApp(options);
       break;
     }
   }
