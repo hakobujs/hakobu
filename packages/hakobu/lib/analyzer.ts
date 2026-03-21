@@ -584,10 +584,17 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     }
 
     if (kind === 'native-addon') {
+      // Compute content hash for deterministic extraction path
+      const addonContent = fs.readFileSync(realPath);
+      const addonHash = require('crypto')
+        .createHash('sha256')
+        .update(addonContent)
+        .digest('hex');
+
       nativeAddons.push({
         snapshotPath,
         absolutePath: realPath,
-        contentHash: '',
+        contentHash: addonHash,
         targetPlatform: null,
         targetArch: null,
       });

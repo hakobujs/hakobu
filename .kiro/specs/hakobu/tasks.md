@@ -133,10 +133,11 @@
     - _Requirements: 6.2, 12.3_
 
 - [ ] 9. Implement native addon and external binary support
-  - [ ] 9.1 Add native addon classification and extraction
+  - [x] 9.1 Add native addon classification and extraction
     - Detect `.node` modules during analysis
     - Extract them to a deterministic cache or temp path at runtime
     - _Requirements: 7.1, 7.2, 13.3_
+    - **Output:** `packages/hakobu/lib/addon-extract.ts`
 
   - [ ] 9.2 Add external artifact declarations
     - Support explicit externals for browsers, helper binaries, and large assets
