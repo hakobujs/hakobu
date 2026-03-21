@@ -256,12 +256,12 @@
 # ─────────────────────────────────────────────────────────────────────
 
 - [ ] 16. Harden bundle mode
-  - [ ] 16.1 Replace deprecated `inlineDynamicImports` with stable Rolldown API
-    - Track Rolldown's migration from `inlineDynamicImports` to a stable
-      code-splitting control option
-    - Switch when the replacement is available without breaking the single-chunk
-      `__dirname`/`__filename` polyfill guarantee
-    - _Depends on: Rolldown API stabilization (external)_
+  - [x] 16.1 Replace deprecated `inlineDynamicImports` with stable Rolldown API
+    - Switched to `codeSplitting: false` output option (supported in current
+      pinned Rolldown v1.0.0-rc.10)
+    - Preserves single-chunk output and `__dirname`/`__filename` polyfill guarantee
+    - No deprecation warnings emitted
+    - **Output:** one-line change in `packages/hakobu/lib/bundler.ts`
 
   - [ ] 16.2 Add a bundler-hostile package registry
     - Replace the current regex-based post-bundle patching with a declarative

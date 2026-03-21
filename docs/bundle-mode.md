@@ -116,7 +116,8 @@ deeply nested CJS code that Rolldown inlines verbatim.
 Hakobu's Rolldown adapter addresses this by:
 - Injecting a module-level banner that defines `__dirname` and `__filename`
   from `import.meta.url`
-- Using `inlineDynamicImports` to ensure the polyfill is visible everywhere
+- Disabling code splitting (`codeSplitting: false`) to ensure the polyfill
+  is visible everywhere in a single output chunk
 
 **Caveat:** The `__dirname` value in bundle mode points to the snapshot entry
 directory, not to the original source file's directory. Code that uses `__dirname`

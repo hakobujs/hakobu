@@ -135,7 +135,9 @@ export class RolldownAdapter implements BundleAdapter {
         },
       });
 
-      // Single-chunk output ensures CJS-to-ESM polyfills apply everywhere.
+      // Single-chunk output ensures CJS-to-ESM __dirname/__filename polyfills
+      // apply everywhere. codeSplitting: false is the non-deprecated replacement
+      // for the old inlineDynamicImports: true output option.
       // Banner provides module-level __dirname/__filename for CJS code
       // that Rolldown inlines without polyfilling.
       const result = await build.write({
@@ -143,7 +145,7 @@ export class RolldownAdapter implements BundleAdapter {
         format: 'esm',
         entryFileNames: outFile,
         sourcemap: false,
-        inlineDynamicImports: true,
+        codeSplitting: false,
         banner: [
           `import{fileURLToPath as _hk_f}from'node:url';`,
           `import{dirname as _hk_d}from'node:path';`,
