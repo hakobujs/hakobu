@@ -156,10 +156,11 @@
     - _Requirements: 8.1, 9.1, 9.2, 10.1_
     - **Output:** `packages/hakobu/lib/packager.ts`
 
-  - [ ] 10.2 Implement diagnostics and target inspection commands
+  - [x] 10.2 Implement diagnostics and target inspection commands
     - Add `doctor`, `inspect-targets`, and `explain` style commands
     - Surface runtime-base availability and unsupported feature reports
     - _Requirements: 9.1, 9.3, 10.2_
+    - **Output:** `packages/hakobu/lib/commands.ts`, `packages/hakobu/lib/bin.ts`
 
   - [ ] 10.3 Normalize configuration and migration aliases
     - Accept a modern config schema while preserving useful `pkg` aliases
