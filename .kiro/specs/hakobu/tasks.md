@@ -151,9 +151,10 @@
     - **Output:** `packages/hakobu/lib/runtime-diagnostics.ts`
 
 - [ ] 10. Build the Hakobu CLI and programmatic API
-  - [ ] 10.1 Implement the core package command
+  - [x] 10.1 Implement the core package command
     - Package apps from config or CLI flags into supported executable targets
     - _Requirements: 8.1, 9.1, 9.2, 10.1_
+    - **Output:** `packages/hakobu/lib/packager.ts`
 
   - [ ] 10.2 Implement diagnostics and target inspection commands
     - Add `doctor`, `inspect-targets`, and `explain` style commands
