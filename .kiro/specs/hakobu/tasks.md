@@ -337,10 +337,11 @@
     - _Depends on: 18.1, 11.2_
     - **Likely output:** update to `packages/hakobu/lib/packager.ts`
 
-  - [ ] 18.3 Add multi-target verification and output reporting
-    - Report per-target packaging results (success/failure, output path, size)
-    - Add a CI fixture or test that packages a simple project for 2+ targets
-      in one invocation
+  - [x] 18.3 Add multi-target verification and output reporting
+    - Summary table shows per-target status, output path, and size in MB
+    - Added `fixtures/test-multi-target.js` verification (8 checks):
+      two-target output naming, file format (Mach-O/ELF), execution, summary,
+      single-target backward compatibility
     - _Depends on: 18.2_
     - **Likely output:** update to `packages/hakobu/lib/commands.ts`, new fixture
 

@@ -107,6 +107,7 @@ export interface PackageMultipleResult {
   status: 'success' | 'failed';
   outputPath: string;
   fileCount: number;
+  sizeMB?: string;
   error?: string;
 }
 
@@ -206,13 +207,16 @@ export async function packageMultiple(
       const result = await packageAppForTarget(
         effectiveRoot, manifest, targetSpec, outputPath, effectiveOptions,
       );
+      const sizeMB = fs.existsSync(result.outputPath)
+        ? (fs.statSync(result.outputPath).size / 1024 / 1024).toFixed(0) + ' MB'
+        : '';
       results.push({
         target: targetSpec,
         status: 'success',
         outputPath: result.outputPath,
         fileCount: result.fileCount,
+        sizeMB,
       });
-      log.info(`  OK  ${outputName}`);
     } catch (err: any) {
       results.push({
         target: targetSpec,
@@ -221,14 +225,23 @@ export async function packageMultiple(
         fileCount: 0,
         error: err.message,
       });
-      log.error(`  FAIL  ${outputName}: ${err.message}`);
     }
   }
 
   // Clean up bundle
   if (bundleOutput) bundleOutput.cleanup();
 
-  // Summary
+  // Summary table
+  log.info('\n=== Packaging Results ===\n');
+  for (const r of results) {
+    const label = `${r.target.platform}-${r.target.arch}`;
+    if (r.status === 'success') {
+      log.info(`  OK    ${label.padEnd(20)} → ${r.outputPath}  (${r.sizeMB})`);
+    } else {
+      log.error(`  FAIL  ${label.padEnd(20)} ${r.error}`);
+    }
+  }
+
   const ok = results.filter(r => r.status === 'success').length;
   const fail = results.filter(r => r.status === 'failed').length;
   log.info(`\n${ok} succeeded, ${fail} failed`);
