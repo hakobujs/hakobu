@@ -1,0 +1,9 @@
+{
+  "name": "fixture-exports-imports",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "imports": {
+    "#utils": "./lib/utils.js"
+  }
+}

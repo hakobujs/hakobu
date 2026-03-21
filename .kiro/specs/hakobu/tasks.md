@@ -186,19 +186,21 @@
     - **Output:** `docs/bundle-mode.md`, improved CLI help with examples and caveat section
 
 - [ ] 12. Build the full compatibility test matrix
-  - [ ] 12.1 Create executable fixtures for core runtime cases
+  - [x] 12.1 Create executable fixtures for core runtime cases
     - Pure ESM, CommonJS, mixed modules, exports/imports, `import.meta.url`,
       dynamic import, and source maps
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 12.2_
+    - **Output:** 7 fixtures in `fixtures/`, 14/14 checks passing (node + packaged)
 
   - [ ] 12.2 Create process-heavy fixtures
     - Workers, forked processes, native addons, externals, and Playwright
     - _Requirements: 6.1, 6.3, 6.4, 7.1, 7.3, 12.3_
 
-  - [ ] 12.3 Compare packaged and unpackaged results
+  - [x] 12.3 Compare packaged and unpackaged results
     - Run the same fixture expectations both before and after packaging
     - Flag semantic drift as release-blocking regressions
     - _Requirements: 12.1, 12.4_
+    - **Output:** `fixtures/run.js` comparison harness with drift detection
 
 - [ ] 13. Set up GitHub Actions CI/CD and release automation
   - [ ] 13.1 Build CI workflows for linting, tests, and packaging fixtures

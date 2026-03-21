@@ -1,0 +1,5 @@
+{
+  "format": "dynamic-import",
+  "dynamic_static_path": "lazy-loaded-ok",
+  "dynamic_builtin": true
+}

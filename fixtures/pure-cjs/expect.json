@@ -1,0 +1,8 @@
+{
+  "format": "cjs",
+  "greet": "Hello, world!",
+  "dirname_defined": true,
+  "filename_defined": true,
+  "require_resolve": true,
+  "json_require": "json-value"
+}

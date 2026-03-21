@@ -1,0 +1,7 @@
+{
+  "format": "mixed",
+  "esm_value": "from-esm",
+  "cjs_value": "from-cjs",
+  "cjs_json": "json-from-mixed",
+  "create_require_works": true
+}

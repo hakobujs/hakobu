@@ -1,0 +1,6 @@
+{
+  "format": "esm-exports-imports",
+  "imports_map": "imports-map-ok",
+  "exports_main": "exports-main-ok",
+  "exports_subpath": "exports-subpath-ok"
+}

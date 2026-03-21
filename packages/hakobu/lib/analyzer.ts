@@ -530,7 +530,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   const nativeAddons: NativeAddon[] = [];
   const visited = new Set<string>();
 
-  function addFile(absolutePath: string): ManifestFile | null {
+  function addFile(absolutePath: string, kindOverride?: FileKind): ManifestFile | null {
     const realPath = fs.realpathSync(absolutePath);
 
     if (visited.has(realPath)) return null;
@@ -548,7 +548,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     }
 
     const snapshotPath = toSnapshotPath(realPath, projectRoot, appId);
-    const kind = classifyFile(realPath);
+    const kind = kindOverride || classifyFile(realPath);
     const pjBoundary = findPackageBoundary(realPath, projectRoot);
     const boundarySnapshot = pjBoundary ? toSnapshotPath(pjBoundary, projectRoot, appId) : null;
 
@@ -645,16 +645,26 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     addFile(rootPjPath);
   }
 
-  // ── 4. Asset glob placeholder ──
+  // ── 4. Resolve asset globs ──
   if (options.assets && options.assets.length > 0) {
-    warnings.push(diag(
-      'info',
-      'unsupported-feature',
-      'Asset glob patterns are not yet resolved by the analyzer.',
-      null,
-      'Asset glob resolution will be supported in a future release. ' +
-      'Files matched by these globs are not included in the manifest.',
-    ));
+    for (const pattern of options.assets) {
+      const assetPath = path.resolve(projectRoot, pattern);
+      if (fs.existsSync(assetPath) && fs.statSync(assetPath).isFile()) {
+        // Direct file path
+        addFile(assetPath, 'asset');
+      } else {
+        // Try as glob using tinyglobby
+        try {
+          const { globSync } = require('tinyglobby');
+          const matches = globSync(pattern, { cwd: projectRoot, absolute: true });
+          for (const match of matches) {
+            if (fs.statSync(match).isFile()) {
+              addFile(match, 'asset');
+            }
+          }
+        } catch {}
+      }
+    }
   }
 
   // ── 5. Build externals ──

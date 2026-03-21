@@ -1,0 +1,8 @@
+{
+  "format": "import-meta-url",
+  "url_is_string": true,
+  "url_starts_with_file": true,
+  "url_ends_with_index_js": true,
+  "dirname_from_url_is_string": true,
+  "sibling_read": "sibling-ok"
+}

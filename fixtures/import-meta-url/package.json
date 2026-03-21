@@ -1,0 +1,9 @@
+{
+  "name": "fixture-import-meta",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "hakobu": {
+    "assets": ["sibling.txt"]
+  }
+}

@@ -305,16 +305,17 @@ function manifestToRecords(manifest: PackagingManifest): {
       body: content,
       [STORE_CONTENT]: content,
       [STORE_STAT]: {
-        isFile: () => true,
-        isDirectory: () => false,
-        isSymbolicLink: () => false,
         size: content.length,
+        isFileValue: true,
+        isDirectoryValue: false,
+        isSocketValue: false,
+        isSymbolicLinkValue: false,
       },
     };
 
     const dir = path.dirname(absPath);
     if (!dirContents.has(dir)) dirContents.set(dir, []);
-    dirContents.get(dir)!.push(absPath);
+    dirContents.get(dir)!.push(path.basename(absPath));
   }
 
   // For ESM entries, inject a CJS shim + hook source into the VFS
@@ -327,17 +328,18 @@ function manifestToRecords(manifest: PackagingManifest): {
       body: shimContent,
       [STORE_CONTENT]: shimContent,
       [STORE_STAT]: {
-        isFile: () => true,
-        isDirectory: () => false,
-        isSymbolicLink: () => false,
         size: shimContent.length,
+        isFileValue: true,
+        isDirectoryValue: false,
+        isSocketValue: false,
+        isSymbolicLinkValue: false,
       },
     };
     entrypoint = shimPath;
 
     // Add shim to its directory listing
     if (!dirContents.has(shimDir)) dirContents.set(shimDir, []);
-    dirContents.get(shimDir)!.push(shimPath);
+    dirContents.get(shimDir)!.push(path.basename(shimPath));
   }
 
   // Add directory records with STORE_LINKS
@@ -347,10 +349,11 @@ function manifestToRecords(manifest: PackagingManifest): {
         file: dir,
         [STORE_LINKS]: files,
         [STORE_STAT]: {
-          isFile: () => false,
-          isDirectory: () => true,
-          isSymbolicLink: () => false,
           size: 0,
+          isFileValue: false,
+          isDirectoryValue: true,
+          isSocketValue: false,
+          isSymbolicLinkValue: false,
         },
       };
     }
@@ -466,6 +469,56 @@ registerHooks({
       if (specifier.startsWith('.')) {
         var resolved = resolveFromSnapshot(specifier, parentPath);
         if (resolved) return { url: 'file://' + resolved, shortCircuit: true };
+      }
+      // #imports specifier — resolve from nearest package.json imports map
+      if (specifier.startsWith('#')) {
+        var dir = parentPath;
+        while (dir.startsWith('/snapshot/')) {
+          dir = dir.substring(0, dir.lastIndexOf('/')) || '/';
+          var pkgPath = dir + '/package.json';
+          if (pkgJsons[pkgPath] && pkgJsons[pkgPath].imports) {
+            var mapping = pkgJsons[pkgPath].imports[specifier];
+            if (typeof mapping === 'string') {
+              var target = resolveFromSnapshot(mapping, dir + '/dummy');
+              if (target) return { url: 'file://' + target, shortCircuit: true };
+            }
+          }
+        }
+      }
+      // Bare specifier — resolve from node_modules with exports map support
+      if (!specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('#')) {
+        var parts = specifier.split('/');
+        var pkgName = parts[0].startsWith('@') ? parts[0] + '/' + parts[1] : parts[0];
+        var subpath = '.' + specifier.slice(pkgName.length);
+        if (subpath === '.') subpath = '.';
+        var searchDir = parentPath;
+        while (searchDir.startsWith('/snapshot/')) {
+          searchDir = searchDir.substring(0, searchDir.lastIndexOf('/')) || '/';
+          var nmPkgJson = searchDir + '/node_modules/' + pkgName + '/package.json';
+          if (pkgJsons[nmPkgJson]) {
+            var pkg = pkgJsons[nmPkgJson];
+            var pkgDir = nmPkgJson.substring(0, nmPkgJson.lastIndexOf('/'));
+            var resolved = null;
+            if (pkg.exports) {
+              // Resolve from exports map
+              var exportEntry = null;
+              if (typeof pkg.exports === 'string') {
+                if (subpath === '.') exportEntry = pkg.exports;
+              } else if (typeof pkg.exports === 'object') {
+                exportEntry = pkg.exports[subpath];
+                if (typeof exportEntry === 'object' && exportEntry !== null) {
+                  exportEntry = exportEntry.import || exportEntry.node || exportEntry.default || null;
+                }
+              }
+              if (typeof exportEntry === 'string') {
+                resolved = resolveFromSnapshot(exportEntry, pkgDir + '/dummy');
+              }
+            } else if (subpath === '.' && pkg.main) {
+              resolved = resolveFromSnapshot('./' + pkg.main, pkgDir + '/dummy');
+            }
+            if (resolved) return { url: 'file://' + resolved, shortCircuit: true };
+          }
+        }
       }
     }
     return nextResolve(specifier, context);

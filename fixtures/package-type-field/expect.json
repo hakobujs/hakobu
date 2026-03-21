@@ -1,0 +1,5 @@
+{
+  "format": "package-type-field",
+  "esm_from_type_module": "esm-file-ok",
+  "cjs_from_type_commonjs": "cjs-subdir-ok"
+}
