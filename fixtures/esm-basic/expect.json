@@ -3,5 +3,5 @@
   "greet": "Hello, world!",
   "import_meta_url_defined": true,
   "import_meta_url_protocol": "file:",
-  "join_works": "a/b"
+  "join_works": true
 }

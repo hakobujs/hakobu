@@ -141,11 +141,34 @@ jobs:
           fi
 
   # ────────────────────────────────────────────────────────────
-  # Fixture matrix (packaged) on macOS — release-gating
+  # Fixture matrix (packaged) — release-gating on macOS + Windows
   # ────────────────────────────────────────────────────────────
-  fixtures:
+  fixtures-macos:
     name: Fixtures (macOS, packaged)
     runs-on: macos-latest
+    needs: validate
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Full fixture matrix (node + packaged)
+        run: node fixtures/run.js
+
+  fixtures-windows:
+    name: Fixtures (Windows, packaged)
+    runs-on: windows-latest
     needs: validate
     timeout-minutes: 30
     steps:
@@ -172,7 +195,7 @@ jobs:
   publish:
     name: Publish to npm
     runs-on: ubuntu-latest
-    needs: [prepare, validate, fixtures]
+    needs: [prepare, validate, fixtures-macos, fixtures-windows]
     if: needs.prepare.outputs.dry_run != 'true'
     timeout-minutes: 10
     permissions:
@@ -242,7 +265,7 @@ jobs:
   dry-run-summary:
     name: Dry Run Summary
     runs-on: ubuntu-latest
-    needs: [prepare, validate, fixtures]
+    needs: [prepare, validate, fixtures-macos, fixtures-windows]
     if: needs.prepare.outputs.dry_run == 'true'
     steps:
       - name: Summary

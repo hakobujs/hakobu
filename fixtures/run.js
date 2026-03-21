@@ -49,7 +49,9 @@ if (fixtures.length === 0) {
 // Parse key=value output into object
 function parseOutput(stdout) {
   const result = {};
-  for (const line of stdout.split('\n')) {
+  // Split on \n and trim \r for Windows compatibility
+  for (const rawLine of stdout.split('\n')) {
+    const line = rawLine.replace(/\r$/, '');
     const eq = line.indexOf('=');
     if (eq === -1) continue;
     const key = line.slice(0, eq);
@@ -91,7 +93,8 @@ function runNode(fixtureDir) {
 // Package and run a fixture with Hakobu
 function runPackaged(fixtureDir, fixtureName) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hk-fix-${fixtureName}-`));
-  const outPath = path.join(tmpDir, fixtureName);
+  const ext = process.platform === 'win32' ? '.exe' : '';
+  const outPath = path.join(tmpDir, fixtureName + ext);
 
   try {
     // Package

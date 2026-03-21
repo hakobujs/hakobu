@@ -89,7 +89,8 @@ These CI jobs must all be green on the release candidate commit.
 | Job | What it validates | Required |
 |---|---|---|
 | `validate` | Build, config tests, node-only fixtures, version match | Yes |
-| `fixtures` | Full fixture matrix on macOS (packaged vs unpackaged) | Yes |
+| `fixtures-macos` | Full fixture matrix on macOS (packaged vs unpackaged) | Yes |
+| `fixtures-windows` | Full fixture matrix on Windows (packaged vs unpackaged) | Yes |
 
 ### From `ci.yml` (must be green on the commit before tagging)
 
@@ -98,13 +99,12 @@ These CI jobs must all be green on the release candidate commit.
 | `fast` | Build, config tests (16), node-only fixtures (12) | Yes |
 | `fixtures-macos` | Full matrix on macOS arm64 (12 fixtures, packaged) | Yes |
 | `fixtures-linux` | Full matrix on Linux x64 (12 fixtures, packaged) | Yes |
-| `windows-smoke` | Build, config tests, node-only fixtures on Windows | Yes |
+| `fixtures-windows` | Full matrix on Windows x64 (12 fixtures, packaged) | Yes |
 
 ### Required additions before v1
 
 | Job | What it validates | Status |
 |---|---|---|
-| `fixtures-windows` | Full fixture matrix on Windows (packaged) | **Not yet implemented** |
 | `playwright-windows` | Windows Playwright/Camoufox handshake (Task 8.4) | **Not yet implemented** |
 
 ## 4. v1 release gate: executable proof
@@ -208,15 +208,15 @@ When all criteria above are met, the release proceeds as follows:
 | Requirement | Status |
 |---|---|
 | macOS arm64 fixtures (packaged) | Done |
-| Linux x64 fixtures (packaged) | CI ready, not yet validated locally |
-| Windows x64 fixtures (packaged) | **Blocked** — CI job not yet implemented |
+| Linux x64 fixtures (packaged) | CI job ready |
+| Windows x64 fixtures (packaged) | CI job ready — awaiting first green run |
 | Windows Playwright/Camoufox gate | **Blocked** — Task 8.4 not started |
 | Config tests | Done (16/16) |
 | External validation (macOS) | Done (camoufox-ts/example, 4/4 benchmarks) |
-| Documentation | Done (8 docs) |
-| Release workflow | Done |
+| Documentation | Done (9 docs) |
+| Release workflow | Done (macOS + Windows fixture gates) |
 
-**Bottom line:** Hakobu is v1-ready on macOS arm64 and likely Linux x64.
-The two remaining blockers are both Windows-specific: packaged fixture CI
-on Windows, and the Playwright/Camoufox stdio gate. These are concrete,
-scoped, and actionable.
+**Bottom line:** Hakobu has CI coverage on all three platforms. The sole
+remaining v1 blocker is the Windows Playwright/Camoufox stdio gate (Task 8.4),
+which validates that packaged apps can launch browsers via `-juggler-pipe`.
+This can be tested manually in VMware Fusion or on a Windows machine.

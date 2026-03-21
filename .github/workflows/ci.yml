@@ -8,17 +8,13 @@ name: CI
 #   - fixture harness in node-only mode (no packaging, fast)
 #
 # Deep checks (push to main + manual):
-#   - full fixture matrix: package every fixture and compare
-#     packaged output against unpackaged Node output
+#   - full fixture matrix on macOS, Linux, and Windows:
+#     package every fixture and compare packaged output against
+#     unpackaged Node output
 #   - drift detection between packaged and unpackaged behavior
 #
 # The deep checks require a base binary for the host platform.
 # The packager fetches it on first use from GitHub Releases.
-#
-# Future additions (not yet implemented):
-#   - Windows fixture validation (Task 8.4)
-#   - Release gating (Task 13.3)
-#   - Linux fixture validation on linux runner
 
 on:
   pull_request:
@@ -123,15 +119,16 @@ jobs:
         run: node fixtures/run.js
 
   # ────────────────────────────────────────────────────────────
-  # Windows — placeholder for future Task 8.4 gate
-  # Currently just builds and runs node-only fixtures.
-  # Will be extended with packaged fixtures + Playwright/Camoufox
-  # once the Windows release gate is implemented.
+  # Windows — full packaged fixture matrix
+  # Packages each fixture into a .exe and runs the comparison
+  # harness. This is a v1 release gate.
+  #
+  # Future: extend with Playwright/Camoufox gate (Task 8.4)
   # ────────────────────────────────────────────────────────────
-  windows-smoke:
-    name: Windows Smoke (build + node-only)
+  fixtures-windows:
+    name: Fixtures (Windows x64, packaged)
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs: fast
     steps:
@@ -152,5 +149,5 @@ jobs:
       - name: Config tests
         run: node packages/hakobu/test/test-config.js
 
-      - name: Fixtures (node-only)
-        run: node fixtures/run.js --node-only
+      - name: Full fixture matrix (node + packaged)
+        run: node fixtures/run.js
