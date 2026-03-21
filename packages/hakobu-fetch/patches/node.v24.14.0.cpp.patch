@@ -435,19 +435,13 @@ new file mode 100644
 index 0000000000..a697294fdf
 --- /dev/null
 +++ node/lib/internal/bootstrap/pkg.js
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,38 @@
 +'use strict';
-+
-+const {
-+  prepareWorkerThreadExecution,
-+  prepareMainThreadExecution
-+} = require('internal/process/pre_execution');
-+
-+if (internalBinding('worker').isMainThread) {
-+  prepareMainThreadExecution(true);
-+} else {
-+  prepareWorkerThreadExecution();
-+}
++// Hakobu/pkg bootstrap: read and run the prelude from the packaged binary.
++// This runs BEFORE the normal Node startup (run_main_module.js), which
++// handles prepareMainThreadExecution and all option processing including
++// --enable-source-maps. We must NOT call prepareMainThreadExecution here
++// to avoid double-initialization that breaks source map support.
 +
 +(function () {
 +  var __require__ = require;
