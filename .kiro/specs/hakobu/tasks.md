@@ -238,13 +238,15 @@
     - _Requirements: 13.1, 13.2, 13.4_
     - **Output:** `docs/maintenance.md`
 
-- [ ] 15. Define v1 release criteria
-  - [ ] 15.1 Freeze the compatibility claim set
+- [x] 15. Define v1 release criteria
+  - [x] 15.1 Freeze the compatibility claim set
     - Decide exactly which Node 24 features and targets are guaranteed at v1
     - _Requirements: 2.4, 10.1, 12.1_
+    - **Output:** `docs/v1-release-criteria.md` Sections 1–2 (targets + runtime features)
 
-  - [ ] 15.2 Gate v1 on executable proof, not unit coverage alone
+  - [x] 15.2 Gate v1 on executable proof, not unit coverage alone
     - Require Windows Playwright/Camoufox, native ESM fixtures, and mixed-module
       fixtures to pass on release candidates
     - _Requirements: 6.2, 12.2, 12.3, 12.4_
+    - **Output:** `docs/v1-release-criteria.md` Sections 3–7 (CI gates, executable proof, checklist)
 
