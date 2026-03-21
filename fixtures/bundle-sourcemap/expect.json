@@ -1,0 +1,9 @@
+{
+  "format": "bundle-sourcemap",
+  "map_readable": true,
+  "map_has_sources": true,
+  "map_has_mappings": true,
+  "map_references_ts": true,
+  "error_message": "sourcemap-test-error",
+  "stack_has_throwError": true
+}

@@ -77,6 +77,12 @@ function compare(actual, expected) {
   return mismatches;
 }
 
+// Check if a fixture requires bundle mode (TypeScript source can't run on plain Node)
+function requiresBundle(fixtureDir) {
+  const pkg = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'package.json'), 'utf8'));
+  return !!(pkg.hakobu && pkg.hakobu.bundle);
+}
+
 // Run a fixture with node (unpackaged)
 function runNode(fixtureDir) {
   const pkg = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'package.json'), 'utf8'));
@@ -133,22 +139,30 @@ for (const name of fixtures) {
 
   // ── Node (unpackaged) ──
   let nodeResult;
-  try {
-    nodeResult = runNode(dir);
-    const mismatches = compare(nodeResult, expected);
-    if (mismatches.length === 0) {
-      console.log(`  OK  ${name} (node)`);
-      totalPass++;
-    } else {
-      console.log(`  XX  ${name} (node)`);
-      for (const m of mismatches) {
-        console.log(`      ${m.key}: expected=${JSON.stringify(m.expected)} got=${JSON.stringify(m.actual)}`);
+  const isBundleOnly = requiresBundle(dir);
+
+  if (isBundleOnly) {
+    // Bundle-mode fixtures (TypeScript) can't run on plain Node
+    console.log(`  --  ${name} (node) — skipped (bundle-mode-only)`);
+    totalSkip++;
+  } else {
+    try {
+      nodeResult = runNode(dir);
+      const mismatches = compare(nodeResult, expected);
+      if (mismatches.length === 0) {
+        console.log(`  OK  ${name} (node)`);
+        totalPass++;
+      } else {
+        console.log(`  XX  ${name} (node)`);
+        for (const m of mismatches) {
+          console.log(`      ${m.key}: expected=${JSON.stringify(m.expected)} got=${JSON.stringify(m.actual)}`);
+        }
+        totalFail++;
       }
+    } catch (err) {
+      console.log(`  XX  ${name} (node) — ${err.message.split('\n')[0]}`);
       totalFail++;
     }
-  } catch (err) {
-    console.log(`  XX  ${name} (node) — ${err.message.split('\n')[0]}`);
-    totalFail++;
   }
 
   // ── Packaged ──

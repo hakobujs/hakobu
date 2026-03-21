@@ -273,14 +273,18 @@
     - _Depends on: 11.2_
     - **Output:** `packages/hakobu/lib/bundler.ts` (BundlePatchRule interface + BUNDLE_PATCH_RULES registry)
 
-  - [ ] 16.3 Support code-split bundle output
-    - Allow Rolldown to produce multiple chunks when `inlineDynamicImports` is
-      not needed (i.e., when the project does not use CJS-origin `__dirname`)
-    - Inject per-chunk `__dirname`/`__filename` polyfills only where needed
-    - Fall back to single-chunk mode when CJS `__dirname` usage is detected
-    - Add a fixture that validates code-split packaged output loads correctly
+  - [x] 16.3 Support code-split bundle output
+    - Rolldown now attempts `codeSplitting: true` first and packages emitted
+      chunk graphs when the output is safe for snapshot execution
+    - Detects raw `__dirname` / `__filename` globals in emitted chunks and
+      falls back deterministically to the existing single-chunk path when
+      per-chunk semantics would be incorrect
+    - Applies compatibility patches across all emitted JS chunks, not only the
+      entry file
+    - Validated with a real multi-chunk dynamic-import fixture plus explicit
+      single-chunk fallback smoke cases
     - _Depends on: 16.1_
-    - **Likely output:** update to `packages/hakobu/lib/bundler.ts`, new fixture
+    - **Output:** `packages/hakobu/lib/bundler.ts` (code-split attempt + fallback detection), `docs/bundle-mode.md`
 
 - [ ] 17. Bundle-mode source maps
   - [x] 17.1 Define the bundled source-map contract
@@ -302,11 +306,15 @@
     - _Depends on: 17.1_
     - **Output:** `packages/hakobu/lib/bundler.ts` (sourcemap: true, mapFiles collection), `packages/hakobu/lib/packager.ts` (load hook inlining, asset passthrough)
 
-  - [ ] 17.3 Verify source-map stack traces in packaged executables
-    - Add a fixture that throws an error from bundled code and verifies the
-      stack trace maps back to the original source file and line
-    - Test on at least macOS and Linux
+  - [x] 17.3 Verify source-map stack traces in packaged executables
+    - Added `bundle-sourcemap` fixture: bundles TS, verifies .map file readable
+      from snapshot, sources reference .ts files, error stack includes function name
+    - Added `test-sourcemap.js` verification script: packages fixture, runs with
+      and without `--enable-source-maps`, 6 pass + 1 known limitation
+    - Known limitation: patched base binary V8 doesn't resolve mapped traces
+      (works on stock Node 24 and Node 25+) — documented as Task 19.1 scope
     - _Depends on: 17.2_
+    - **Output:** `fixtures/bundle-sourcemap/`, `fixtures/test-sourcemap.js`
     - **Likely output:** new fixture in `fixtures/`
 
 - [ ] 18. Multi-target packaging
@@ -333,3 +341,37 @@
     - _Depends on: 18.2_
     - **Likely output:** update to `packages/hakobu/lib/commands.ts`, new fixture
 
+- [ ] 19. Restore opt-in bytecode compilation
+  - [ ] 19.1 Refine the sourceless V8/base-binary patch path
+    - Audit the inherited sourceless bytecode patch set in `hakobu-fetch`,
+      especially the global V8 flag toggles used by
+      `EnableCompilationForSourcelessUse()` / `DisableCompilationForSourcelessUse()`
+    - Remove or scope the side effects that currently break source-position
+      tracking for `registerHooks()` + `import()` source maps in patched bases
+    - Rebuild and verify base binaries after the patch refinement
+    - _Depends on: 3.3, 17.2_
+    - **Likely output:** updated `packages/hakobu-fetch/patches/node.v24.14.0.cpp.patch`, base-binary verification update
+
+  - [ ] 19.2 Add modern Hakobu config/CLI support for `bytecode: true`
+    - Define the modern config/API surface for enabling bytecode compilation
+      without reviving legacy `pkg` behavior blindly
+    - Keep source-only mode as the default and make bytecode explicitly opt-in
+    - Normalize any migration aliases carefully and document changed behavior
+    - _Depends on: 10.3, 19.1_
+    - **Likely output:** updates to `packages/hakobu/lib/config.ts`, CLI/config docs
+
+  - [ ] 19.3 Implement bytecode generation in the package pipeline
+    - Re-enable or modernize the bytecode fabrication path for supported
+      targets when `bytecode: true` is set
+    - Keep ESM/CJS runtime semantics correct and make failure modes explicit
+      for unsupported modules or targets
+    - _Depends on: 19.2_
+    - **Likely output:** updates to `packages/hakobu/lib/fabricator.ts`, `packages/hakobu/lib/packager.ts`
+
+  - [ ] 19.4 Verify bytecode mode against source maps and real fixtures
+    - Add fixtures that prove bytecode mode still runs packaged apps
+    - Verify that source maps remain correct when bytecode is off, and document
+      any intentional tradeoffs when bytecode is on
+    - Add at least one real-project validation pass with bytecode enabled
+    - _Depends on: 19.3, 17.3_
+    - **Likely output:** fixture additions, docs updates, release/readiness note

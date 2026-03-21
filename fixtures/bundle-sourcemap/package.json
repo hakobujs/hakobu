@@ -1,0 +1,9 @@
+{
+  "name": "fixture-bundle-sourcemap",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "hakobu": {
+    "bundle": true
+  }
+}
