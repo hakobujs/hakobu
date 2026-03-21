@@ -1,0 +1,8 @@
+{
+  "name": "fixture-worker-threads",
+  "version": "1.0.0",
+  "main": "index.js",
+  "hakobu": {
+    "assets": ["worker.js"]
+  }
+}

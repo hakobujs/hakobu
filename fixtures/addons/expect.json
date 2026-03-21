@@ -1,0 +1,9 @@
+{
+  "format": "addons",
+  "dlopen_exists": true,
+  "resolve_node_file": "not-found-ok",
+  "require_missing_node": "not-found-ok",
+  "addon_path_join": true,
+  "process_config_exists": true,
+  "process_config_has_variables": true
+}

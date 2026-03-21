@@ -1,0 +1,8 @@
+{
+  "format": "worker-threads",
+  "main_is_main_thread": true,
+  "worker_received": 21,
+  "worker_computed": 42,
+  "worker_thread_id_is_number": true,
+  "worker_is_not_main": true
+}

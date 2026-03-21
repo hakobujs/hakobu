@@ -1,0 +1,9 @@
+{
+  "format": "spawn-exec",
+  "spawn_child_stdout": "spawn-arg",
+  "spawn_child_status": 0,
+  "env_inherit": "inherited-ok",
+  "exit_code_propagated": 42,
+  "custom_stdio_stdout": "piped",
+  "execPath_exists": true
+}

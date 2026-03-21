@@ -1,0 +1,7 @@
+{
+  "format": "fork-ipc",
+  "ipc_echo": "hello-from-parent",
+  "child_pid_is_number": true,
+  "from_child": true,
+  "child_is_different_pid": true
+}

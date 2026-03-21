@@ -1,0 +1,11 @@
+{
+  "format": "external-artifact",
+  "execPath_is_string": true,
+  "execPath_exists": true,
+  "execDir_is_dir": true,
+  "env_lookup": true,
+  "externals_path_constructed": true,
+  "artifact_path_is_absolute": true,
+  "cwd_is_string": true,
+  "cwd_exists": true
+}

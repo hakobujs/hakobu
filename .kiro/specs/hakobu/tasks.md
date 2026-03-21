@@ -192,9 +192,10 @@
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 12.2_
     - **Output:** 7 fixtures in `fixtures/`, 14/14 checks passing (node + packaged)
 
-  - [ ] 12.2 Create process-heavy fixtures
+  - [x] 12.2 Create process-heavy fixtures
     - Workers, forked processes, native addons, externals, and Playwright
     - _Requirements: 6.1, 6.3, 6.4, 7.1, 7.3, 12.3_
+    - **Output:** 5 fixtures (spawn-exec, fork-ipc, worker-threads, addons, external-artifact), 24/24 total checks passing
 
   - [x] 12.3 Compare packaged and unpackaged results
     - Run the same fixture expectations both before and after packaging

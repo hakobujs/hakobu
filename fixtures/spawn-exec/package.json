@@ -1,0 +1,8 @@
+{
+  "name": "fixture-spawn-exec",
+  "version": "1.0.0",
+  "main": "index.js",
+  "hakobu": {
+    "assets": ["echo-child.js", "env-child.js", "exit-child.js"]
+  }
+}
