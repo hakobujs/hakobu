@@ -318,14 +318,16 @@
     - **Likely output:** new fixture in `fixtures/`
 
 - [ ] 18. Multi-target packaging
-  - [ ] 18.1 Design the multi-target CLI and API
-    - Support `--target node24-linux-x64,node24-win-x64,node24-macos-arm64`
-      or equivalent multi-value syntax
-    - Define output naming: `{name}-{platform}-{arch}` with `.exe` for Windows
-    - Define how `--output` interacts with multiple targets (output directory
-      vs output template)
+  - [x] 18.1 Design the multi-target CLI and API
+    - CLI: comma-separated `--target` values, `--target all` shorthand
+    - Output: `--output` is a directory in multi-target mode, file in single-target
+    - Naming: `{appId}-{platform}-{arch}` with `.exe` for Windows
+    - Config: `targets` (plural) array in package.json `hakobu` field
+    - API: new `packageMultiple()` function alongside existing `packageApp()`
+    - Execution model: bundle + analyze once, binary injection per target
+    - Single-target backward compatibility preserved
     - _Depends on: 10.1, 10.3_
-    - **Likely output:** update to `packages/hakobu/lib/bin.ts`, `packages/hakobu/lib/packager.ts`
+    - **Output:** `docs/multi-target.md`
 
   - [ ] 18.2 Reuse analysis and bundle across targets
     - Run the analyzer and bundler once, then produce executables for each
