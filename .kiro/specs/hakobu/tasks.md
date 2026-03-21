@@ -121,7 +121,7 @@
     - Preserve messaging semantics and argv behavior
     - _Requirements: 6.3, 9.1, 12.1_
 
-  - [ ] 8.3 Implement `worker_threads` bootstrap for snapshot modules
+  - [x] 8.3 Implement `worker_threads` bootstrap for snapshot modules
     - Load worker entrypoints from the packaged runtime
     - Verify worker imports and message passing in ESM and CJS modes
     - _Requirements: 6.4, 12.1, 12.2_
