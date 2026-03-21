@@ -30,6 +30,7 @@ import {
   fromFileUrl,
   toNative,
 } from './snapshot-path';
+import { resolveExports, resolveImports, ESM_CONDITIONS } from './exports-resolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Resolution result
@@ -179,12 +180,17 @@ export class ESMResolver {
       return null; // non-snapshot file: URL → Node handles it
     }
 
-    // 3. Relative specifier (./foo, ../bar, /snapshot/...)
+    // 3. #-prefixed package imports
+    if (specifier.startsWith('#')) {
+      return this.resolvePackageImports(specifier, parentUrl);
+    }
+
+    // 4. Relative specifier (./foo, ../bar, /snapshot/...)
     if (specifier.startsWith('.') || specifier.startsWith('/')) {
       return this.resolveRelative(specifier, parentUrl);
     }
 
-    // 4. Bare specifier (package name)
+    // 5. Bare specifier (package name)
     return this.resolveBare(specifier, parentUrl);
   }
 
@@ -238,13 +244,11 @@ export class ESMResolver {
     const parentSnapshotPath = fromFileUrl(parentUrl);
     if (!parentSnapshotPath) return null;
 
-    // Parse package name and subpath
     const pkgName = specifier.startsWith('@')
       ? specifier.split('/').slice(0, 2).join('/')
       : specifier.split('/')[0];
-    const subpath = specifier.slice(pkgName.length) || '.';
+    const subpath = '.' + specifier.slice(pkgName.length);
 
-    // Walk up from parent looking for node_modules
     let searchDir = parentSnapshotPath.substring(0, parentSnapshotPath.lastIndexOf('/'));
     const snapshotRoot = '/snapshot/' + this.sfs.getAppId();
 
@@ -252,28 +256,33 @@ export class ESMResolver {
       const nmDir = searchDir + '/node_modules/' + pkgName;
 
       if (this.sfs.existsSync(nmDir)) {
-        // Found the package — check for exports map
         const pkgJsonPath = nmDir + '/package.json';
         const pkg = this.sfs.existsSync(pkgJsonPath) ? this.sfs.getPackage(pkgJsonPath) : null;
 
-        if (pkg?.exports && subpath !== '.') {
-          // Package has exports and a non-root subpath.
-          // Try direct file resolution first (legacy fallback).
-          const directResolved = tryResolveFile(toCanonical(nmDir + '/' + subpath), this.sfs);
-          if (directResolved) {
-            return {
-              url: toFileUrl(directResolved),
-              snapshotPath: directResolved,
-              format: determineFormat(directResolved, this.sfs),
-            };
+        // ── exports map resolution ──
+        // When "exports" is present, Node ONLY uses the exports map
+        // for bare specifier resolution. "main" is ignored.
+        if (pkg?.exports != null) {
+          const resolved = resolveExports(pkg.exports, subpath, ESM_CONDITIONS);
+          if (resolved && typeof resolved === 'string') {
+            const fullPath = toCanonical(nmDir + '/' + resolved);
+            const fileResolved = tryResolveFile(fullPath, this.sfs);
+            if (fileResolved) {
+              return {
+                url: toFileUrl(fileResolved),
+                snapshotPath: fileResolved,
+                format: determineFormat(fileResolved, this.sfs),
+              };
+            }
           }
-          // Can't resolve — exports map needed but not evaluated
+          // exports map present but resolution failed — do NOT fall
+          // back to main/index (Node doesn't). Return null so the
+          // diagnostic layer can report the error.
           return null;
         }
 
-        // Root import (subpath === '.')
+        // ── Legacy resolution (no exports map) ──
         if (subpath === '.') {
-          // Try main field
           if (pkg?.main) {
             const mainResolved = tryResolveFile(toCanonical(nmDir + '/' + pkg.main), this.sfs);
             if (mainResolved) {
@@ -284,7 +293,6 @@ export class ESMResolver {
               };
             }
           }
-          // Try index
           const indexResolved = tryResolveFile(nmDir + '/index', this.sfs);
           if (indexResolved) {
             return {
@@ -294,8 +302,7 @@ export class ESMResolver {
             };
           }
         } else {
-          // Non-root subpath without exports
-          const subResolved = tryResolveFile(toCanonical(nmDir + '/' + subpath), this.sfs);
+          const subResolved = tryResolveFile(toCanonical(nmDir + '/' + subpath.slice(2)), this.sfs);
           if (subResolved) {
             return {
               url: toFileUrl(subResolved),
@@ -305,13 +312,39 @@ export class ESMResolver {
           }
         }
 
-        return null; // Package found but entry not resolved
+        return null;
       }
 
-      // Walk up
       searchDir = searchDir.substring(0, searchDir.lastIndexOf('/'));
     }
 
-    return null; // Package not found in snapshot
+    return null;
+  }
+
+  // ── #imports resolution ──
+
+  private resolvePackageImports(specifier: string, parentUrl: string): ResolveResult | null {
+    const parentSnapshotPath = fromFileUrl(parentUrl);
+    if (!parentSnapshotPath) return null;
+
+    // Find the package boundary for the importing file
+    const boundary = this.sfs.getPackageBoundary(parentSnapshotPath);
+    if (!boundary?.imports) return null;
+
+    const resolved = resolveImports(boundary.imports, specifier, ESM_CONDITIONS);
+    if (!resolved) return null;
+
+    // Resolved target is relative to the package directory
+    const fullPath = toCanonical(boundary.directory + '/' + resolved);
+    const fileResolved = tryResolveFile(fullPath, this.sfs);
+    if (fileResolved) {
+      return {
+        url: toFileUrl(fileResolved),
+        snapshotPath: fileResolved,
+        format: determineFormat(fileResolved, this.sfs),
+      };
+    }
+
+    return null;
   }
 }

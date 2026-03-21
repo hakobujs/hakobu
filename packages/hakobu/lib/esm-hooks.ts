@@ -146,6 +146,60 @@ function getFormat(p) {
   return 'commonjs';
 }
 
+// ── exports/imports resolution (Node algorithm) ──
+
+const ESM_CONDS = ['import', 'node', 'default'];
+
+function resolveTarget(target, conds) {
+  if (typeof target === 'string') return target;
+  if (target === null) return null;
+  if (Array.isArray(target)) {
+    for (const t of target) { const r = resolveTarget(t, conds); if (r) return r; }
+    return null;
+  }
+  if (typeof target === 'object') {
+    for (const c of conds) { if (c in target) return resolveTarget(target[c], conds); }
+    return null;
+  }
+  return null;
+}
+
+function resolveExportsMap(exportsVal, subpath, conds) {
+  if (exportsVal == null) return null;
+  if (typeof exportsVal === 'string') return subpath === '.' ? exportsVal : null;
+  if (Array.isArray(exportsVal)) return resolveTarget(exportsVal, conds);
+  if (typeof exportsVal !== 'object') return null;
+  const keys = Object.keys(exportsVal);
+  const isCondObj = keys.length > 0 && !keys[0].startsWith('.');
+  if (isCondObj) return subpath === '.' ? resolveTarget(exportsVal, conds) : null;
+  if (subpath in exportsVal) return resolveTarget(exportsVal[subpath], conds);
+  for (const key of keys) {
+    if (!key.includes('*')) continue;
+    const si = key.indexOf('*'), pre = key.slice(0, si), suf = key.slice(si + 1);
+    if (subpath.startsWith(pre) && subpath.endsWith(suf)) {
+      const matched = subpath.slice(pre.length, subpath.length - (suf.length || Infinity));
+      const t = resolveTarget(exportsVal[key], conds);
+      if (t && typeof t === 'string') return t.replace('*', matched);
+    }
+  }
+  return null;
+}
+
+function resolveImportsMap(importsVal, spec, conds) {
+  if (!importsVal || typeof importsVal !== 'object' || !spec.startsWith('#')) return null;
+  if (spec in importsVal) return resolveTarget(importsVal[spec], conds);
+  for (const key of Object.keys(importsVal)) {
+    if (!key.includes('*')) continue;
+    const si = key.indexOf('*'), pre = key.slice(0, si), suf = key.slice(si + 1);
+    if (spec.startsWith(pre) && spec.endsWith(suf)) {
+      const matched = spec.slice(pre.length, spec.length - (suf.length || Infinity));
+      const t = resolveTarget(importsVal[key], conds);
+      if (t && typeof t === 'string') return t.replace('*', matched);
+    }
+  }
+  return null;
+}
+
 function findPackageDir(filePath) {
   let dir = dirname(filePath);
   const root = '/snapshot/' + appId;
@@ -187,6 +241,30 @@ export function resolve(specifier, context, nextResolve) {
   const parentPath = urlToPath(parentUrl);
   if (!parentPath) return nextResolve(specifier, context);
 
+  // #-prefixed package imports
+  if (specifier.startsWith('#')) {
+    const pkg = findPackageDir(parentPath);
+    if (pkg) {
+      // Read full package.json to get imports field
+      const pjEntry = entries.get(pkg.directory + '/package.json');
+      if (pjEntry) {
+        const pjSource = new TextDecoder().decode(blob.slice(pjEntry.offset, pjEntry.offset + pjEntry.size));
+        const pjData = JSON.parse(pjSource);
+        if (pjData.imports) {
+          const resolved = resolveImportsMap(pjData.imports, specifier, ESM_CONDS);
+          if (resolved) {
+            const fullPath = canonicalize(pkg.directory + '/' + resolved);
+            const fileResolved = tryFile(fullPath);
+            if (fileResolved) {
+              return { url: pathToUrl(fileResolved), shortCircuit: true, format: getFormat(fileResolved) };
+            }
+          }
+        }
+      }
+    }
+    return nextResolve(specifier, context);
+  }
+
   // Relative specifier
   if (specifier.startsWith('.') || specifier.startsWith('/')) {
     const parentDir = dirname(parentPath);
@@ -205,7 +283,7 @@ export function resolve(specifier, context, nextResolve) {
   const pkgName = specifier.startsWith('@')
     ? specifier.split('/').slice(0, 2).join('/')
     : specifier.split('/')[0];
-  const subpath = specifier.slice(pkgName.length) || '.';
+  const subpath = '.' + specifier.slice(pkgName.length);
 
   let searchDir = dirname(parentPath);
   const snapRoot = '/snapshot/' + appId;
@@ -213,8 +291,36 @@ export function resolve(specifier, context, nextResolve) {
   while (searchDir.startsWith(snapRoot)) {
     const nmDir = searchDir + '/node_modules/' + pkgName;
     if (isDir(nmDir)) {
+      const pkgPjPath = nmDir + '/package.json';
+      const pkgPj = packages.get(pkgPjPath);
+
+      // Read full package.json for exports
+      const pjEntry = entries.get(pkgPjPath);
+      let exportsVal = null;
+      if (pjEntry) {
+        try {
+          const pjSource = new TextDecoder().decode(blob.slice(pjEntry.offset, pjEntry.offset + pjEntry.size));
+          const pjData = JSON.parse(pjSource);
+          exportsVal = pjData.exports;
+        } catch {}
+      }
+
+      // If exports is present, use it exclusively (Node semantics)
+      if (exportsVal != null) {
+        const resolved = resolveExportsMap(exportsVal, subpath, ESM_CONDS);
+        if (resolved && typeof resolved === 'string') {
+          const fullPath = canonicalize(nmDir + '/' + resolved);
+          const fileResolved = tryFile(fullPath);
+          if (fileResolved) {
+            return { url: pathToUrl(fileResolved), shortCircuit: true, format: getFormat(fileResolved) };
+          }
+        }
+        // exports present but couldn't resolve — do NOT fall back
+        return nextResolve(specifier, context);
+      }
+
+      // Legacy resolution (no exports)
       if (subpath === '.') {
-        const pkgPj = packages.get(nmDir + '/package.json');
         if (pkgPj?.main) {
           const resolved = tryFile(canonicalize(nmDir + '/' + pkgPj.main));
           if (resolved) {
@@ -226,18 +332,16 @@ export function resolve(specifier, context, nextResolve) {
           return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
         }
       } else {
-        const resolved = tryFile(canonicalize(nmDir + '/' + subpath));
+        const resolved = tryFile(canonicalize(nmDir + '/' + subpath.slice(2)));
         if (resolved) {
           return { url: pathToUrl(resolved), shortCircuit: true, format: getFormat(resolved) };
         }
       }
-      // Package found but couldn't resolve entry
       return nextResolve(specifier, context);
     }
     searchDir = dirname(searchDir);
   }
 
-  // Not in snapshot — let Node handle it
   return nextResolve(specifier, context);
 }
 

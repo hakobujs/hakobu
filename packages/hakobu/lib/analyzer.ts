@@ -30,6 +30,7 @@ import type {
   DiagnosticSeverity,
   WarningCategory,
 } from './manifest';
+import { resolveExports, resolveImports, ESM_CONDITIONS, CJS_CONDITIONS } from './exports-resolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Analyzer options
@@ -326,41 +327,30 @@ function resolvePackage(
       const pkgJsonPath = path.join(pkgDir, 'package.json');
       const pj = fs.existsSync(pkgJsonPath) ? readPackageJson(pkgJsonPath) : null;
 
-      // ── ESM diagnostic: exports field present ──
-      // When a package has "exports", Node uses ONLY the exports map for
-      // resolution (the "main" field is ignored for bare specifiers).
-      // The analyzer currently falls back to legacy resolution, which may
-      // resolve a different file than what "exports" specifies.
       const hasExports = pj?.exports != null;
-      const hasImports = pj?.imports != null;
 
+      // ── Exports map resolution ──
+      // When "exports" is present, Node uses ONLY the exports map.
+      // "main" is ignored for bare specifiers.
       if (hasExports) {
+        const normalizedSubpath = '.' + specifier.slice(pkgName.length);
+        const exportsResult = resolveExports(pj!.exports, normalizedSubpath, ESM_CONDITIONS);
+        if (exportsResult && typeof exportsResult === 'string') {
+          const resolved = resolveRelative(exportsResult, pkgDir);
+          if (resolved) return resolved;
+        }
+        // exports present but couldn't resolve — do NOT fall back to main/index
         warnings.push(diag(
           'warning',
           'exports-not-resolved',
-          `Package '${pkgName}' has an "exports" field. ` +
-          `Hakobu used legacy resolution for '${specifier}' which may differ ` +
-          `from what Node 24 resolves via the exports map.`,
+          `Could not resolve '${specifier}' via exports map in '${pkgName}'.`,
           fromFile,
-          `This will be resolved correctly once exports-map resolution is ` +
-          `implemented. The packaged app may fail to import this module ` +
-          `if the exports map points to a different file than "main".`,
+          `Check that the exports map exposes this subpath.`,
         ));
+        return null;
       }
 
-      if (hasImports) {
-        warnings.push(diag(
-          'info',
-          'imports-not-resolved',
-          `Package '${pkgName}' has an "imports" field (subpath imports). ` +
-          `This is not yet evaluated during analysis.`,
-          fromFile,
-          `Subpath imports (#-prefixed) within this package may not be ` +
-          `resolved correctly in the packaged app.`,
-        ));
-      }
-
-      // Legacy resolution fallback
+      // ── Legacy resolution (no exports) ──
       if (subpath === '.') {
         if (pj?.main) {
           const resolved = resolveRelative(pj.main, pkgDir);
@@ -373,27 +363,13 @@ function resolvePackage(
         if (resolved) return resolved;
       }
 
-      // Couldn't resolve — differentiate based on whether exports is the cause
-      if (hasExports) {
-        warnings.push(diag(
-          'error',
-          'exports-not-resolved',
-          `Cannot resolve '${specifier}': package '${pkgName}' uses "exports" ` +
-          `and the requested subpath is not accessible via legacy resolution.`,
-          fromFile,
-          `This package likely exposes '${subpath}' only through its exports ` +
-          `map. Hakobu does not yet resolve exports maps — this import will ` +
-          `fail in the packaged app. Consider adding the package to externals.`,
-        ));
-      } else {
-        warnings.push(diag(
-          'warning',
-          'unresolved-import',
-          `Could not resolve '${specifier}' within ${pkgDir}`,
-          fromFile,
-          'Check that the package exports this path.',
-        ));
-      }
+      warnings.push(diag(
+        'warning',
+        'unresolved-import',
+        `Could not resolve '${specifier}' within ${pkgDir}`,
+        fromFile,
+        'Check that the package exports this path.',
+      ));
       return null;
     }
 
@@ -416,6 +392,26 @@ function resolveSpecifier(
   warnings: ManifestWarning[]
 ): string | null {
   if (isBuiltin(specifier)) return null;
+
+  // #-prefixed package imports
+  if (specifier.startsWith('#')) {
+    const pj = findNearestPackageJson(path.dirname(fromFile));
+    if (pj?.data.imports) {
+      const resolved = resolveImports(pj.data.imports, specifier, ESM_CONDITIONS);
+      if (resolved && typeof resolved === 'string') {
+        const pkgDir = path.dirname(pj.path);
+        return resolveRelative(resolved, pkgDir);
+      }
+    }
+    warnings.push(diag(
+      'warning',
+      'imports-not-resolved',
+      `Could not resolve '${specifier}' via imports map.`,
+      fromFile,
+      `Check that the nearest package.json has an "imports" entry for '${specifier}'.`,
+    ));
+    return null;
+  }
 
   if (specifier.startsWith('.') || specifier.startsWith('/')) {
     return resolveRelative(specifier, path.dirname(fromFile));
