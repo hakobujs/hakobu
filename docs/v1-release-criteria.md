@@ -17,7 +17,7 @@ All four must be green. Any failure blocks the release.
 |---|---|---|---|
 | `linux-x64` | Published | CI job required | Ready |
 | `linux-arm64` | Published | CI job required | Ready |
-| `win-x64` | Published | CI job required | **Blocked** — packaged fixtures not yet running on Windows |
+| `win-x64` | Published | CI job required | Ready — CI green + manual VMware validation passed |
 | `macos-arm64` | Published | CI job required | Ready |
 
 ### v1-supported (Tier 2)
@@ -101,11 +101,11 @@ These CI jobs must all be green on the release candidate commit.
 | `fixtures-linux` | Full matrix on Linux x64 (12 fixtures, packaged) | Yes |
 | `fixtures-windows` | Full matrix on Windows x64 (12 fixtures, packaged) | Yes |
 
-### Required additions before v1
+### Completed manually (not automated in CI)
 
-| Job | What it validates | Status |
+| Gate | What it validates | Status |
 |---|---|---|
-| `playwright-windows` | Windows Playwright/Camoufox handshake (Task 8.4) | **Not yet implemented** |
+| Windows Playwright/Camoufox | Packaged .exe launches Camoufox browser via direct pipe on Windows | Passed — manual VMware Fusion validation, 2026-03-21 |
 
 ## 4. v1 release gate: executable proof
 
@@ -191,14 +191,14 @@ These items are intentionally deferred. They are not v1 blockers.
 
 When all criteria above are met, the release proceeds as follows:
 
-1. [ ] All 12 fixtures pass packaged on macOS arm64 (CI green)
-2. [ ] All 12 fixtures pass packaged on Linux x64 (CI green)
-3. [ ] All 12 fixtures pass packaged on Windows x64 (CI green)
-4. [ ] Windows Playwright/Camoufox gate passes (Task 8.4)
-5. [ ] Zero semantic drift on all three platforms
-6. [ ] Config normalization tests pass (16/16)
-7. [ ] External validation (camoufox-ts/example) passes on macOS
-8. [ ] All docs listed in Section 5 are current
+1. [x] All 12 fixtures pass packaged on macOS arm64 (CI green)
+2. [x] All 12 fixtures pass packaged on Linux x64 (CI green)
+3. [x] All 12 fixtures pass packaged on Windows x64 (CI green)
+4. [x] Windows Playwright/Camoufox gate passes (Task 8.4) — manual VMware validation
+5. [x] Zero semantic drift on all three platforms
+6. [x] Config normalization tests pass (16/16)
+7. [x] External validation (camoufox-ts/example) passes on macOS
+8. [x] All docs listed in Section 5 are current
 9. [ ] Package versions set to `1.0.0` in both package.json files
 10. [ ] Tag `v1.0.0` and push
 11. [ ] `release.yml` workflow completes: npm publish + GitHub Release
@@ -207,16 +207,16 @@ When all criteria above are met, the release proceeds as follows:
 
 | Requirement | Status |
 |---|---|
-| macOS arm64 fixtures (packaged) | Done |
-| Linux x64 fixtures (packaged) | CI job ready |
-| Windows x64 fixtures (packaged) | CI job ready — awaiting first green run |
-| Windows Playwright/Camoufox gate | **Blocked** — Task 8.4 not started |
+| macOS arm64 fixtures (packaged) | Done — CI green |
+| Linux x64 fixtures (packaged) | Done — CI green |
+| Windows x64 fixtures (packaged) | Done — CI green (24/24) |
+| Windows Playwright/Camoufox gate | Done — manual VMware validation passed |
 | Config tests | Done (16/16) |
 | External validation (macOS) | Done (camoufox-ts/example, 4/4 benchmarks) |
-| Documentation | Done (9 docs) |
+| External validation (Windows) | Done (camoufox-example.exe, benchmark --headless passed) |
+| Documentation | Done (10 docs) |
 | Release workflow | Done (macOS + Windows fixture gates) |
 
-**Bottom line:** Hakobu has CI coverage on all three platforms. The sole
-remaining v1 blocker is the Windows Playwright/Camoufox stdio gate (Task 8.4),
-which validates that packaged apps can launch browsers via `-juggler-pipe`.
-This can be tested manually in VMware Fusion or on a Windows machine.
+**Bottom line:** All v1 release criteria are satisfied. The remaining
+steps are mechanical: bump versions to 1.0.0, tag, and push to trigger
+the release workflow.

@@ -40,7 +40,7 @@
     - _Requirements: 2.2, 2.4, 11.3, 13.2_
     - **Output:** `PROVENANCE.json`, `expected-shas.json`, `docs/verification-contract.md`
 
-- [ ] 4. Refactor the package manifest and analysis pipeline
+- [x] 4. Refactor the package manifest and analysis pipeline
   - [x] 4.1 Design the normalized Hakobu packaging manifest
     - Define internal types for scripts, assets, externals, package metadata,
       native addons, and bundle-mode config
@@ -111,7 +111,7 @@
     - Document and test intentional compatibility changes
     - _Requirements: 4.3, 4.4, 14.2_
 
-- [ ] 8. Restore child-process, fork, and worker semantics
+- [x] 8. Restore child-process, fork, and worker semantics
   - [x] 8.1 Validate raw `spawn` and `exec` behavior from packaged executables
     - Cover custom `stdio` arrays, descriptor inheritance, and environment flow
     - _Requirements: 6.1, 12.1, 12.3_
@@ -126,11 +126,12 @@
     - Verify worker imports and message passing in ESM and CJS modes
     - _Requirements: 6.4, 12.1, 12.2_
 
-  - [ ] 8.4 Add the Windows Playwright/Camoufox release-gate fixture
+  - [x] 8.4 Add the Windows Playwright/Camoufox release-gate fixture
     - Package a real Playwright-based fixture that launches Camoufox/Firefox via
       `-juggler-pipe`
     - Make successful Windows handshake a gating test for Windows support
     - _Requirements: 6.2, 12.3_
+    - **Output:** Manual validation in VMware Fusion — `camoufox-example.exe` packaged from macOS, runs on Windows with direct Playwright pipe transport (no Bun bridge needed under Node/Hakobu)
 
 - [x] 9. Implement native addon and external binary support
   - [x] 9.1 Add native addon classification and extraction
@@ -150,7 +151,7 @@
     - _Requirements: 7.4, 9.3_
     - **Output:** `packages/hakobu/lib/runtime-diagnostics.ts`
 
-- [ ] 10. Build the Hakobu CLI and programmatic API
+- [x] 10. Build the Hakobu CLI and programmatic API
   - [x] 10.1 Implement the core package command
     - Package apps from config or CLI flags into supported executable targets
     - _Requirements: 8.1, 9.1, 9.2, 10.1_
@@ -168,7 +169,7 @@
     - _Requirements: 9.2, 14.1, 14.2_
     - **Output:** `packages/hakobu/lib/config.ts`, 16-test suite in `test/test-config.js`
 
-- [ ] 11. Add optional bundle mode
+- [x] 11. Add optional bundle mode
   - [x] 11.1 Define bundle-mode plugin interface
     - Keep bundle mode as a pre-processing adapter before snapshot assembly
     - _Requirements: 8.2, 8.3_
@@ -185,7 +186,7 @@
     - _Requirements: 8.4, 14.3_
     - **Output:** `docs/bundle-mode.md`, improved CLI help with examples and caveat section
 
-- [ ] 12. Build the full compatibility test matrix
+- [x] 12. Build the full compatibility test matrix
   - [x] 12.1 Create executable fixtures for core runtime cases
     - Pure ESM, CommonJS, mixed modules, exports/imports, `import.meta.url`,
       dynamic import, and source maps
@@ -203,7 +204,7 @@
     - _Requirements: 12.1, 12.4_
     - **Output:** `fixtures/run.js` comparison harness with drift detection
 
-- [ ] 13. Set up GitHub Actions CI/CD and release automation
+- [x] 13. Set up GitHub Actions CI/CD and release automation
   - [x] 13.1 Build CI workflows for linting, tests, and packaging fixtures
     - Run fast checks on pull requests and deep executable tests on main/release
     - _Requirements: 11.1, 12.1_
