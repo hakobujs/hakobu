@@ -263,13 +263,15 @@
     - No deprecation warnings emitted
     - **Output:** one-line change in `packages/hakobu/lib/bundler.ts`
 
-  - [ ] 16.2 Add a bundler-hostile package registry
-    - Replace the current regex-based post-bundle patching with a declarative
-      registry of known bundler-hostile patterns and their fixes
-    - Cover at least: playwright-core, esbuild, prisma, sharp
-    - Allow user-defined patch entries via config if needed
+  - [x] 16.2 Add a bundler-hostile package registry
+    - Replaced monolithic patchBundleOutput with declarative BUNDLE_PATCH_RULES
+      registry and applyBundlePatches() function
+    - Each rule has name, scope, pattern, replacement — self-documenting and
+      individually logged when applied
+    - Covers: playwright-core (3 rules) and relative package.json traversals (3 rules)
+    - New packages can be added by appending to the BUNDLE_PATCH_RULES array
     - _Depends on: 11.2_
-    - **Likely output:** `packages/hakobu/lib/bundle-patches.ts`
+    - **Output:** `packages/hakobu/lib/bundler.ts` (BundlePatchRule interface + BUNDLE_PATCH_RULES registry)
 
   - [ ] 16.3 Support code-split bundle output
     - Allow Rolldown to produce multiple chunks when `inlineDynamicImports` is

@@ -153,11 +153,8 @@ export class RolldownAdapter implements BundleAdapter {
         ].join(''),
       });
 
-      // Post-bundle: patch known bundler-hostile patterns.
-      // playwright-core uses require.resolve() and require() with absolute
-      // paths to its package.json, which break after bundling. Replace them
-      // with stubs since Hakobu's packaged apps provide executablePath directly.
-      patchBundleOutput(path.join(tmpDir, outFile));
+      // Post-bundle: apply compatibility patches for bundler-hostile packages
+      applyBundlePatches(path.join(tmpDir, outFile));
 
       // Create a minimal package.json for the bundled output
       const bundledPkg = {
@@ -197,65 +194,114 @@ export class RolldownAdapter implements BundleAdapter {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Post-bundle patching
+// Bundle compatibility patches
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Patch known bundler-hostile patterns in the output.
+ * A single post-bundle text replacement rule.
  *
- * Some packages (notably playwright-core) use require.resolve() and require()
- * with paths to their own package.json at runtime. After bundling, these
- * paths are absolute build-time paths that don't exist at runtime.
- *
- * This applies targeted text replacements — the same approach used by
- * the consumer project's build script and other bundlers.
+ * Each rule has a name (for diagnostics), a regex pattern to match in the
+ * bundled output, and a replacement string. Rules are applied in order —
+ * more specific patterns should come before generic ones.
  */
-function patchBundleOutput(filePath: string): void {
+interface BundlePatchRule {
+  /** Human-readable name for log output. */
+  name: string;
+  /** Package or pattern class this rule addresses. */
+  scope: string;
+  /** Regex to match in the bundled JS output. */
+  pattern: RegExp;
+  /** Replacement string (supports $1, $2, etc.). */
+  replacement: string;
+}
+
+/**
+ * Registry of known bundler-hostile patterns and their fixes.
+ *
+ * These packages use runtime introspection patterns (require.resolve to
+ * their own package.json, dirname-based path discovery, etc.) that produce
+ * build-time absolute paths after bundling. The paths don't exist at runtime
+ * in a packaged executable, so we replace them with safe stubs.
+ *
+ * Order matters: dirname(resolve(...)) rules must come before resolve(...)
+ * rules, because the latter is a substring of the former.
+ *
+ * To add a new package: append rules to the array below. Each rule is
+ * independent and self-documenting.
+ */
+const BUNDLE_PATCH_RULES: BundlePatchRule[] = [
+  // ── playwright-core ──
+  // Playwright resolves its own package.json at runtime to find its
+  // installation directory. After bundling, these become absolute build-time
+  // paths that don't exist in the packaged snapshot.
+  {
+    name: 'dirname(resolve(playwright/package.json))',
+    scope: 'playwright-core',
+    pattern: /(?:dirname|_hk_d)\(\s*(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)\s*\)/g,
+    replacement: 'process.cwd()',
+  },
+  {
+    name: 'resolve(playwright/package.json)',
+    scope: 'playwright-core',
+    pattern: /(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    replacement: '"playwright-core-stub"',
+  },
+  {
+    name: 'require(playwright/package.json)',
+    scope: 'playwright-core',
+    pattern: /(?:__require|require)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    replacement: '({name:"playwright-core",version:"0.0.0"})',
+  },
+
+  // ── Generic: relative package.json traversals ──
+  // Many packages use dirname(require.resolve('../../package.json')) to find
+  // their own root. After bundling, relative paths resolve to the bundler's
+  // working directory at build time, not the runtime location.
+  {
+    name: 'dirname(resolve(../package.json))',
+    scope: 'relative-package-json',
+    pattern: /[\w$.]+\.dirname\(\s*(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)\s*\)/g,
+    replacement: 'process.cwd()',
+  },
+  {
+    name: 'resolve(../package.json)',
+    scope: 'relative-package-json',
+    pattern: /(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
+    replacement: '"package-json-stub"',
+  },
+  {
+    name: 'require(../package.json)',
+    scope: 'relative-package-json',
+    pattern: /(?:__require|require)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
+    replacement: '({name:"unknown",version:"0.0.0"})',
+  },
+];
+
+/**
+ * Apply all bundle compatibility patches to a file.
+ * Returns the list of rules that matched (for diagnostics).
+ */
+function applyBundlePatches(filePath: string): string[] {
   const original = fs.readFileSync(filePath, 'utf8');
   let code = original;
+  const applied: string[] = [];
 
-  // Order matters: patch dirname(resolve(...)) before resolve(...) alone
-
-  // playwright-core: dirname(require.resolve(".../package.json"))
-  code = code.replace(
-    /(?:dirname|_hk_d)\(\s*(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)\s*\)/g,
-    'process.cwd()',
-  );
-
-  // require.resolve(".../playwright-core/package.json")
-  code = code.replace(
-    /(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
-    '"playwright-core-stub"',
-  );
-
-  // require(".../playwright-core/package.json")
-  code = code.replace(
-    /(?:__require|require)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
-    '({name:"playwright-core",version:"0.0.0"})',
-  );
-
-  // dirname(require.resolve('../../../package.json')) — relative paths invalid after bundling
-  code = code.replace(
-    /[\w$.]+\.dirname\(\s*(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)\s*\)/g,
-    'process.cwd()',
-  );
-
-  // require.resolve('../../../package.json')
-  code = code.replace(
-    /(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
-    '"package-json-stub"',
-  );
-
-  // require('../../../package.json')
-  code = code.replace(
-    /(?:__require|require)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
-    '({name:"unknown",version:"0.0.0"})',
-  );
+  for (const rule of BUNDLE_PATCH_RULES) {
+    const before = code;
+    code = code.replace(rule.pattern, rule.replacement);
+    if (code !== before) {
+      applied.push(`${rule.scope}: ${rule.name}`);
+    }
+  }
 
   if (code !== original) {
     fs.writeFileSync(filePath, code);
-    log.info('  patched: bundler-hostile require patterns');
+    for (const desc of applied) {
+      log.info(`  patched: ${desc}`);
+    }
   }
+
+  return applied;
 }
 
 // ─────────────────────────────────────────────────────────────────────

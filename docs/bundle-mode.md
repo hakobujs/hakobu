@@ -158,20 +158,31 @@ This means code that conditionally uses `bun:sqlite` (with a try/catch fallback)
 will work, but code that unconditionally depends on `bun:sqlite` features will
 fail at runtime with a clear error message.
 
-### Post-bundle patching
+### Post-bundle compatibility patches
 
-Some packages use runtime patterns that break after bundling. Hakobu
-automatically patches the most common ones:
+Some packages use runtime self-introspection patterns that break after
+bundling. Hakobu applies targeted fixes from a compatibility registry.
+
+**playwright-core** — resolves its own `package.json` at runtime:
 
 | Pattern | Fix |
 |---------|-----|
-| `require.resolve(".../playwright-core/package.json")` | Replaced with a stub path |
-| `require(".../playwright-core/package.json")` | Replaced with `{name, version}` stub |
-| `dirname(require.resolve("../../../package.json"))` | Replaced with `process.cwd()` |
-| `require("../../../package.json")` | Replaced with `{name, version}` stub |
+| `dirname(require.resolve(".../playwright-core/package.json"))` | `process.cwd()` |
+| `require.resolve(".../playwright-core/package.json")` | Stub path |
+| `require(".../playwright-core/package.json")` | `{name, version}` stub |
 
-These patches are applied to the bundled output before packaging. They are
-targeted at known patterns and do not modify arbitrary `require()` calls.
+**Relative package.json traversals** — many packages use `require("../../package.json")`:
+
+| Pattern | Fix |
+|---------|-----|
+| `dirname(require.resolve("../package.json"))` | `process.cwd()` |
+| `require.resolve("../package.json")` | Stub path |
+| `require("../package.json")` | `{name, version}` stub |
+
+Patches are applied to the bundled output before packaging. Each applied
+patch is logged individually (e.g., `patched: playwright-core: require(...)`).
+Patches do not modify arbitrary `require()` calls — they match only the
+specific patterns listed above.
 
 **Caveat:** If a package uses an unusual variant of these patterns, the patch
 may not match. If you see `Cannot find module '../package.json'` errors at
