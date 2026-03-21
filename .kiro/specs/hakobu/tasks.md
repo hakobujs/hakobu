@@ -116,7 +116,7 @@
     - Cover custom `stdio` arrays, descriptor inheritance, and environment flow
     - _Requirements: 6.1, 12.1, 12.3_
 
-  - [ ] 8.2 Implement packaged `fork()` bootstrap
+  - [x] 8.2 Implement packaged `fork()` bootstrap
     - Allow child Node processes to target packaged modules correctly
     - Preserve messaging semantics and argv behavior
     - _Requirements: 6.3, 9.1, 12.1_
