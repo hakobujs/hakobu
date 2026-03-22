@@ -146,14 +146,35 @@ hakobu . --bundle --output ./dist/app
 
 See `docs/bundle-mode.md` for full details on semantic differences.
 
+## Bytecode mode
+
+Opt-in V8 bytecode compilation for CJS scripts:
+
+```bash
+hakobu ./my-app --bytecode --output ./dist/app
+```
+
+```json
+{ "hakobu": { "bytecode": true } }
+```
+
+| Input | Bytecode compiled? |
+|-------|-------------------|
+| CJS scripts (`.js`, `.cjs`) | Yes |
+| ESM scripts (`.mjs`, `type: "module"`) | No — source-only |
+| JSON files | No — included as content |
+| Assets / native addons | No — included as content/extracted |
+
+**Restrictions:**
+- `--bytecode` + `--bundle` cannot be combined (bundle produces ESM)
+- Source maps are not available in bytecode mode
+- Bytecode is V8 version-specific — executables must run on the same V8 version they were compiled with
+
 ## Current known limits
 
 1. **Node 24 only** — no support for older Node lines.
-2. **Single target per invocation** — no multi-target builds.
-3. **No bytecode compilation** — source is always embedded.
-4. **No snapshot compression** — payload is uncompressed.
-5. **`process.execPath -e` not supported** — use script files for child eval.
-6. **No `--options` (V8 flags)** — V8 flag baking is not implemented.
-7. **`linuxstatic-arm64` blocked** — toolchain incompatibility.
-8. **Windows Playwright/Camoufox gate** — not yet validated (Task 8.4).
-9. **Source maps in bundle mode** — not preserved after Rolldown bundling.
+2. **No snapshot compression** — payload is uncompressed.
+3. **`process.execPath -e` not supported** — use script files for child eval.
+4. **No `--options` (V8 flags)** — V8 flag baking is not implemented.
+5. **`linuxstatic-arm64` blocked** — toolchain incompatibility.
+6. **Bytecode + bundle incompatible** — use one or the other.

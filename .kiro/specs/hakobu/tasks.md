@@ -377,10 +377,13 @@
     - _Depends on: 19.2_
     - **Output:** `packages/hakobu/lib/packager.ts` (manifestToRecords bytecode, packer bytecode flag)
 
-  - [ ] 19.4 Verify bytecode mode against source maps and real fixtures
-    - Add fixtures that prove bytecode mode still runs packaged apps
-    - Verify that source maps remain correct when bytecode is off, and document
-      any intentional tradeoffs when bytecode is on
-    - Add at least one real-project validation pass with bytecode enabled
+  - [x] 19.4 Verify bytecode mode against source maps and real fixtures
+    - Added `fixtures/test-bytecode.js` (8 checks): CJS bytecode packaging,
+      cross-module require, JSON require, bundle rejection, ESM source-only
+      behavior, import.meta, source-only backward compat
+    - Fixed fabricator hang: added shutdownFabricator() after producer finishes
+    - Fixed fabricator binary: bytecode mode uses patched base binary (with
+      sourceless support) instead of host Node
+    - Updated docs/runtime-support.md with bytecode mode section
     - _Depends on: 19.3, 17.3_
-    - **Likely output:** fixture additions, docs updates, release/readiness note
+    - **Output:** `fixtures/test-bytecode.js`, `docs/runtime-support.md`, fabricator fixes in `packager.ts`

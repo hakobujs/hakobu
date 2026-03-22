@@ -18,6 +18,7 @@ import { need, system } from '@hakobu/hakobu-fetch';
 import { analyze } from './analyzer';
 import { getAdapter } from './bundler';
 import type { BundleOutput } from './bundler';
+import { shutdown as shutdownFabricator } from './fabricator';
 import type { PackagingManifest } from './manifest';
 import { log } from './log';
 import {
@@ -302,7 +303,10 @@ async function packageAppForTarget(
       nodeRange: targetSpec.nodeRange,
       platform: system.hostPlatform as any,
       arch: system.hostArch,
-      binaryPath: process.execPath,
+      // For bytecode compilation, the fabricator must use the patched base binary
+      // (which has sourceless: true support). For source-only mode, it doesn't matter
+      // because STORE_BLOB stripes are removed by the packer.
+      binaryPath: options.bytecode ? binaryPath : process.execPath,
       output: '',
       fabricator: null as any,
     },
@@ -322,6 +326,9 @@ async function packageAppForTarget(
     }
     await plusx(target.output);
   }
+
+  // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
+  shutdownFabricator();
 
   return {
     outputPath: path.resolve(outputPath),
@@ -515,7 +522,7 @@ async function packageAppInner(
       nodeRange: targetSpec.nodeRange,
       platform: system.hostPlatform as any,
       arch: system.hostArch,
-      binaryPath: process.execPath,
+      binaryPath: options.bytecode ? binaryPath : process.execPath,
       output: '',
       fabricator: null as any,
     },
@@ -550,6 +557,8 @@ async function packageAppInner(
     }
     await plusx(target.output);
   }
+
+  shutdownFabricator();
 
   log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${outputPath}`);
 
