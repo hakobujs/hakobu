@@ -1,2 +1,8 @@
 {
+  "hakobu-base-v24.14.0-linux-arm64": "ff61733560434a2e0afa8164a989720271a43ffab8aed121b2cfc7ad8b324e0e",
+  "hakobu-base-v24.14.0-linux-x64": "c5968b5a42be76cbc6e8f052e948d3d96be93b35fdbde21ffc7ec3e27e2b9b83",
+  "hakobu-base-v24.14.0-linuxstatic-x64": "1173551ddabc898d9c9c7a1d9eb1b83b4c66661b2669e1f3ea19982517cc0211",
+  "hakobu-base-v24.14.0-macos-arm64": "ef50fcb313160f18f622d59a664ed5688249756322dbdd0e6a60096a641e9d0f",
+  "hakobu-base-v24.14.0-macos-x64": "0679180f74a3d870431170728d6edef864a436524585dcb394db9cfc0b272529",
+  "hakobu-base-v24.14.0-win-x64": "d8dbe3c91a57414e61df284dae69416c56b3cd6f6784e886ccba66df55d8110e"
 }
