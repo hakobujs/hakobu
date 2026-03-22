@@ -38,13 +38,18 @@ Bundle mode (optional — for TypeScript / monorepo projects):
 Advanced:
   --bytecode          Compile JS to V8 bytecode before packaging
 
-macOS signing:
-  --sign-identity <id>  Code-signing identity (default: ad-hoc)
+Signing:
+  --sign-identity <id>  macOS code-signing identity (default: ad-hoc)
                         Also: HAKOBU_SIGN_IDENTITY env var
   --notarize            Submit to Apple notarization after signing
                         Requires: HAKOBU_APPLE_ID, HAKOBU_APPLE_PASSWORD,
                         HAKOBU_APPLE_TEAM_ID env vars
                         See docs/macos-notarization.md
+  --win-cert <path>     Windows Authenticode .pfx/.p12 certificate
+                        Also: HAKOBU_WIN_CERT env var
+  --win-cert-password   Certificate password
+                        Also: HAKOBU_WIN_CERT_PASSWORD env var
+                        See docs/windows-signing.md
 
   Without --bundle, Hakobu packages JS files directly (native mode).
   With --bundle, Rolldown compiles TS and resolves dependencies first.
@@ -86,7 +91,7 @@ async function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['target', 'targets', 'output', 'entry', 'external', 'config',
              'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
-             'options', 'no-dict', 'sign-identity'],
+             'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
@@ -154,9 +159,11 @@ async function main() {
       const targetStr = options.target || '';
       const isMulti = targetStr.includes(',') || targetStr === 'all';
 
-      // macOS signing options
+      // Signing options
       if (argv['sign-identity']) options.signIdentity = argv['sign-identity'];
       if (argv.notarize) options.notarize = true;
+      if (argv['win-cert']) options.winCertPath = argv['win-cert'];
+      if (argv['win-cert-password']) options.winCertPassword = argv['win-cert-password'];
 
       if (isMulti) {
         const results = await packageMultiple({
@@ -170,6 +177,8 @@ async function main() {
           bundleExternal: options.bundleExternal,
           signIdentity: options.signIdentity,
           notarize: options.notarize,
+          winCertPath: options.winCertPath,
+          winCertPassword: options.winCertPassword,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

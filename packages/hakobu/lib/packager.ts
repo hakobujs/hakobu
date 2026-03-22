@@ -35,6 +35,7 @@ import producer from './producer';
 import { CompressType } from './compress_type';
 import { plusx } from './chmod';
 import { patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable } from './mach-o';
+import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-sign';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -90,6 +91,18 @@ export interface PackageOptions {
    * via env vars or options.
    */
   notarize?: boolean;
+
+  /**
+   * Windows Authenticode certificate path (.pfx / .p12).
+   * Also read from HAKOBU_WIN_CERT env var.
+   */
+  winCertPath?: string;
+
+  /**
+   * Windows Authenticode certificate password.
+   * Also read from HAKOBU_WIN_CERT_PASSWORD env var.
+   */
+  winCertPassword?: string;
 }
 
 export interface PackageResult {
@@ -154,6 +167,8 @@ export interface PackageMultipleOptions {
   bundleExternal?: string[];
   signIdentity?: string;
   notarize?: boolean;
+  winCertPath?: string;
+  winCertPassword?: string;
 }
 
 export interface PackageMultipleResult {
@@ -398,16 +413,24 @@ async function packageAppForTarget(
     });
 
     // Post-production
-    if (targetSpec.platform !== 'win') {
-      if (targetSpec.platform === 'macos') {
-        const buf = patchMachOExecutable(fs.readFileSync(target.output));
-        fs.writeFileSync(target.output, buf);
-        try { signMachOExecutable(target.output, options.signIdentity); } catch {}
+    if (targetSpec.platform === 'macos') {
+      const buf = patchMachOExecutable(fs.readFileSync(target.output));
+      fs.writeFileSync(target.output, buf);
+      try { signMachOExecutable(target.output, options.signIdentity); } catch {}
 
-        if (options.notarize) {
-          await notarizeMachOExecutable({ executable: target.output });
-        }
+      if (options.notarize) {
+        await notarizeMachOExecutable({ executable: target.output });
       }
+      await plusx(target.output);
+    } else if (targetSpec.platform === 'win') {
+      if (hasWindowsSigningCredentials(options.winCertPath)) {
+        signWindowsExecutable({
+          executable: target.output,
+          certPath: options.winCertPath,
+          certPassword: options.winCertPassword,
+        });
+      }
+    } else {
       await plusx(target.output);
     }
 
@@ -621,24 +644,32 @@ async function packageAppInner(
       nativeBuild: false,
     });
 
-    // ── 8. Post-production: Mach-O patching + codesign + chmod ──
-    if (targetSpec.platform !== 'win') {
-      if (targetSpec.platform === 'macos') {
-        // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
-        const buf = patchMachOExecutable(fs.readFileSync(target.output));
-        fs.writeFileSync(target.output, buf);
-        try {
-          signMachOExecutable(target.output, options.signIdentity);
-        } catch {
-          if (targetSpec.arch === 'arm64') {
-            log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
-          }
-        }
-
-        if (options.notarize) {
-          await notarizeMachOExecutable({ executable: target.output });
+    // ── 8. Post-production: signing + chmod ──
+    if (targetSpec.platform === 'macos') {
+      // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
+      const buf = patchMachOExecutable(fs.readFileSync(target.output));
+      fs.writeFileSync(target.output, buf);
+      try {
+        signMachOExecutable(target.output, options.signIdentity);
+      } catch {
+        if (targetSpec.arch === 'arm64') {
+          log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
         }
       }
+
+      if (options.notarize) {
+        await notarizeMachOExecutable({ executable: target.output });
+      }
+      await plusx(target.output);
+    } else if (targetSpec.platform === 'win') {
+      if (hasWindowsSigningCredentials(options.winCertPath)) {
+        signWindowsExecutable({
+          executable: target.output,
+          certPath: options.winCertPath,
+          certPassword: options.winCertPassword,
+        });
+      }
+    } else {
       await plusx(target.output);
     }
 

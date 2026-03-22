@@ -503,10 +503,21 @@
     - _Depends on: 10.1_
     - **Output:** `mach-o.ts`, `packager.ts`, `bin.ts`, `docs/macos-notarization.md`
 
-  - [ ] 23.2 Add Windows Authenticode signing support
-    - Sign the output .exe with an Authenticode certificate when provided
-    - Document the signing workflow for CI environments
+  - [x] 23.2 Add Windows Authenticode signing support
+    - Created `packages/hakobu/lib/windows-sign.ts` with
+      `signWindowsExecutable()` — tries signtool.exe first, falls
+      back to osslsigncode for cross-platform signing from macOS/Linux
+    - SHA-256 hash, RFC 3161 timestamp (DigiCert default, configurable)
+    - Added `--win-cert` and `--win-cert-password` CLI flags
+    - Added `HAKOBU_WIN_CERT`, `HAKOBU_WIN_CERT_PASSWORD`,
+      `HAKOBU_WIN_TIMESTAMP_URL` env vars
+    - Options flow through `packageApp` and `packageMultiple`
+    - Unsigned is the default when no cert is configured
+    - Non-Windows targets silently ignore Windows signing options
+    - Full docs at `docs/windows-signing.md` covering certificate
+      types (OV/EV), PFX export, CI setup, cross-signing, troubleshooting
     - _Depends on: 10.1_
+    - **Output:** `windows-sign.ts`, `packager.ts`, `bin.ts`, `docs/windows-signing.md`
 
   - [ ] 23.3 Add output metadata injection
     - Inject version/icon/description metadata into Windows PE executables
