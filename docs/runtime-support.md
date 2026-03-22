@@ -170,6 +170,31 @@ hakobu ./my-app --bytecode --output ./dist/app
 - Source maps are not available in bytecode mode
 - Bytecode is V8 version-specific — executables must run on the same V8 version they were compiled with
 
+## Offline / air-gapped packaging
+
+Hakobu can package without network access when the required base binaries
+are already cached.
+
+```bash
+# Set HAKOBU_OFFLINE to prevent any network access
+HAKOBU_OFFLINE=1 hakobu ./my-app --output ./dist/app
+```
+
+**Pre-populating the cache:**
+
+1. On a machine with network access, run Hakobu once per target:
+   ```bash
+   hakobu ./my-app --target node24-linux-x64 --output /dev/null
+   hakobu ./my-app --target node24-win-x64 --output /dev/null
+   ```
+2. Copy `~/.hakobu/cache/` to the air-gapped machine
+3. Package with `HAKOBU_OFFLINE=1`
+
+If a required base binary is missing from cache in offline mode, Hakobu fails
+immediately with the exact cache path to populate.
+
+The cache location is configurable via `HAKOBU_CACHE_PATH`.
+
 ## Current known limits
 
 1. **Node 24 only** — no support for older Node lines.

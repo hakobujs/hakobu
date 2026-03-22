@@ -441,11 +441,14 @@
     - _Depends on: 18.2_
     - **Output:** parallel pre-fetch in `packageMultiple()` in `packages/hakobu/lib/packager.ts`
 
-  - [ ] 21.3 Support offline/air-gapped packaging
-    - Allow pre-populating the base binary cache from a local directory
-      or archive without network access
-    - Document the offline workflow for CI environments behind firewalls
+  - [x] 21.3 Support offline/air-gapped packaging
+    - `HAKOBU_OFFLINE=1` env var prevents all download and build-from-source
+    - If cache has a valid binary → packaging proceeds without network
+    - If cache misses → immediate clear error with the exact path to populate
+    - Integrity verification (21.1) still runs on cached binaries
+    - Documented in docs/runtime-support.md with cache pre-population workflow
     - _Depends on: 21.1_
+    - **Output:** offline gate in `packages/hakobu-fetch/lib/index.ts`, docs update
 
 - [ ] 22. Broader real-world fixture coverage
   - [ ] 22.1 Add a real npm-dependency fixture

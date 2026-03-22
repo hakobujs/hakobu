@@ -132,7 +132,12 @@ export async function need(opts: NeedOptions) {
   const remote = remotePlace({ arch, nodeVersion, platform, version });
   const expectedHash = EXPECTED_HASHES[remote.name];
 
+  const offline = !!process.env.HAKOBU_OFFLINE;
   let fetchFailed;
+
+  if (offline && forceFetch) {
+    throw wasReported('Cannot use --force-fetch in offline mode (HAKOBU_OFFLINE is set).');
+  }
 
   if (forceFetch && !expectedHash) {
     throw wasReported(
@@ -188,6 +193,16 @@ export async function need(opts: NeedOptions) {
         return built;
       }
     }
+  }
+
+  // ── Offline mode: no download or build from source ──
+  if (offline) {
+    throw wasReported(
+      `Base binary not found in cache for ${platform}-${arch}.\n` +
+      `HAKOBU_OFFLINE is set — cannot download or build.\n` +
+      `Pre-populate the cache by running without HAKOBU_OFFLINE first, or copy\n` +
+      `the base binary to: ${fetched}`
+    );
   }
 
   if (!forceBuild && expectedHash) {
