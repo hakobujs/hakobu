@@ -57,6 +57,7 @@ Linux AppDir metadata (used with --appdir):
   --desktop-categories <c>  Semicolon-separated categories (e.g., Utility;Development;)
   --desktop-terminal    App needs a terminal (default: true)
   --no-desktop-terminal App does not need a terminal
+  --linux-icon <path>   Path to .png file for the app icon
                         Also configurable via "hakobu.linux" in package.json
 
 Signing:
@@ -125,7 +126,8 @@ async function main() {
              'product-name', 'file-description', 'company-name', 'file-version',
              'product-version', 'icon',
              'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright',
-             'macos-icon', 'desktop-name', 'desktop-comment', 'desktop-categories'],
+             'macos-icon', 'desktop-name', 'desktop-comment', 'desktop-categories',
+             'linux-icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize', 'app-bundle', 'appdir',
               'desktop-terminal', 'no-desktop-terminal'],
@@ -223,6 +225,7 @@ async function main() {
       if (argv['desktop-categories']) cliLinux.categories = argv['desktop-categories'];
       if (argv['desktop-terminal']) cliLinux.terminal = true;
       if (argv['no-desktop-terminal']) cliLinux.terminal = false;
+      if (argv['linux-icon']) cliLinux.iconPath = argv['linux-icon'];
       if (Object.keys(cliLinux).length > 0) {
         options.linux = { ...options.linux, ...cliLinux };
       }

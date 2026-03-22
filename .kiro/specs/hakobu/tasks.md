@@ -664,16 +664,21 @@
     - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-appdir.js`
 
-  - [ ] 25.3 Support PNG icon placement for Linux
-    - Accept icon path(s) via config (`metadata.linuxIcon`) or CLI
-      (`--linux-icon`)
-    - Place icons in the hicolor icon theme directory structure:
-      `<AppDir>/usr/share/icons/hicolor/{16x16,32x32,48x48,128x128,256x256}/apps/<name>.png`
-    - Accept either a single PNG (placed at all sizes) or a directory
-      of pre-sized PNGs
-    - Also place a copy at `<AppDir>/<name>.png` (AppImage convention)
+  - [x] 25.3 Support PNG icon placement for Linux
+    - Added `iconPath` field to `LinuxDesktopMetadata` and
+      `hakobu.linux` config shape
+    - CLI flag: `--linux-icon <path>` (overrides config)
+    - When configured: copies `.png` to
+      `usr/share/icons/hicolor/256x256/apps/<appName>.png` and to
+      `<AppDir>/<appName>.png` (AppImage root convention)
+    - Icon name in `.desktop` file matches the placed icon
+    - Validates input: rejects non-`.png` files with clear error
+    - When no icon configured: AppDir is valid, no icon files placed
+    - 24/24 verification tests (6 new: hicolor placement, root
+      placement, .desktop consistency, no-icon valid, non-.png rejected)
     - _Depends on: 25.1_
-    - **Output:** icon placement logic, config/CLI plumbing
+    - **Output:** `appdir.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-appdir.js`
 
   - [ ] 25.4 Add AppStream metainfo support
     - Generate a minimal `<name>.metainfo.xml` / `<name>.appdata.xml`

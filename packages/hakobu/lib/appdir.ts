@@ -67,6 +67,13 @@ export interface LinuxDesktopMetadata {
    * Default: appName
    */
   icon?: string;
+
+  /**
+   * Path to a PNG file to place as the application icon.
+   * The file is copied into the hicolor icon theme at 256x256
+   * and to the AppDir root (AppImage convention).
+   */
+  iconPath?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -196,6 +203,31 @@ export function createAppDir(opts: AppDirOptions): string {
     path.join(applicationsDir, desktopFileName),
     desktopContent,
   );
+
+  // Place icon if configured
+  const iconPath = opts.linux?.iconPath;
+  if (iconPath) {
+    if (!fs.existsSync(iconPath)) {
+      throw new Error(`Linux icon file not found: ${iconPath}`);
+    }
+    if (!iconPath.endsWith('.png')) {
+      throw new Error(
+        `Linux icon must be a .png file (got ${path.extname(iconPath) || 'no extension'}).`
+      );
+    }
+
+    const iconName = (opts.linux?.icon || appName) + '.png';
+
+    // Place in hicolor/256x256/apps/ (standard freedesktop location)
+    const hicolor256 = path.join(iconsDir, '256x256', 'apps');
+    fs.mkdirSync(hicolor256, { recursive: true });
+    fs.copyFileSync(iconPath, path.join(hicolor256, iconName));
+
+    // Place at AppDir root (AppImage convention)
+    fs.copyFileSync(iconPath, path.join(appDirPath, iconName));
+
+    log.info(`  icon: ${iconName}`);
+  }
 
   log.info(`Created Linux AppDir: ${appDirPath}`);
 

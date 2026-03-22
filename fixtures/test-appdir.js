@@ -212,6 +212,80 @@ test('.desktop: Terminal=false when configured', () => {
     throw new Error('Terminal should be false');
 });
 
+// ── Icon placement tests (unit, any platform) ──
+
+// Create a minimal test PNG (valid PNG header)
+const testPngPath = path.join(tmpDir, 'test-icon.png');
+const pngHeader = Buffer.from([
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
+]);
+fs.writeFileSync(testPngPath, pngHeader);
+
+// Test 7: icon placed into hicolor and AppDir root
+const fakeExec4 = path.join(tmpDir, 'icon-app');
+fs.writeFileSync(fakeExec4, '#!/bin/sh\necho test', { mode: 0o755 });
+
+const result4 = createAppDir({
+  executablePath: fakeExec4,
+  outputPath: path.join(tmpDir, 'IconApp'),
+  appName: 'icon-app',
+  linux: { iconPath: testPngPath },
+});
+
+test('Icon: placed in hicolor/256x256/apps/', () => {
+  const iconDest = path.join(result4, 'usr', 'share', 'icons', 'hicolor', '256x256', 'apps', 'icon-app.png');
+  if (!fs.existsSync(iconDest)) throw new Error('Icon not in hicolor/256x256/apps/');
+  const content = fs.readFileSync(iconDest);
+  if (content[0] !== 0x89 || content[1] !== 0x50) throw new Error('Icon content corrupted');
+});
+
+test('Icon: placed at AppDir root (AppImage convention)', () => {
+  const rootIcon = path.join(result4, 'icon-app.png');
+  if (!fs.existsSync(rootIcon)) throw new Error('Icon not at AppDir root');
+});
+
+test('Icon: .desktop Icon field matches icon name', () => {
+  const appsDir = path.join(result4, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Icon=icon-app'))
+    throw new Error('Icon field does not match placed icon name');
+});
+
+// Test 8: no icon — AppDir still valid
+test('No icon: hicolor/256x256 does not exist when no icon configured', () => {
+  const hicolor256 = path.join(result1, 'usr', 'share', 'icons', 'hicolor', '256x256');
+  if (fs.existsSync(hicolor256))
+    throw new Error('256x256 should not exist without icon');
+});
+
+test('No icon: no root PNG when no icon configured', () => {
+  const pngs = fs.readdirSync(result1).filter(f => f.endsWith('.png'));
+  if (pngs.length > 0)
+    throw new Error('Should not have root PNG without icon: ' + pngs);
+});
+
+// Test 9: non-.png rejected
+test('Icon validation: non-.png rejected', () => {
+  const fakeJpg = path.join(tmpDir, 'bad.jpg');
+  fs.writeFileSync(fakeJpg, 'not a png');
+  const fakeExec5 = path.join(tmpDir, 'reject-app');
+  fs.writeFileSync(fakeExec5, '#!/bin/sh\necho test', { mode: 0o755 });
+
+  try {
+    createAppDir({
+      executablePath: fakeExec5,
+      outputPath: path.join(tmpDir, 'BadIcon'),
+      linux: { iconPath: fakeJpg },
+    });
+    throw new Error('Should have failed');
+  } catch (err) {
+    if (!err.message.includes('.png'))
+      throw new Error('Expected .png validation error, got: ' + err.message);
+  }
+});
+
 // ── CLI validation tests (run on any platform) ──
 
 const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hk-appdir-cli-'));

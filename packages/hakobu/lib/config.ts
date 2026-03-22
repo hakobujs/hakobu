@@ -104,6 +104,8 @@ export interface HakobuConfig {
     categories?: string;
     terminal?: boolean;
     icon?: string;
+    /** Path to a .png file to place as the application icon. */
+    iconPath?: string;
   };
 }
 
