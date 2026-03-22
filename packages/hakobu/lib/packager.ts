@@ -43,6 +43,7 @@ import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
 import { createAppBundle } from './app-bundle';
 import type { MacosBundleMetadata } from './app-bundle';
+import { createAppDir, isLinuxPlatform } from './appdir';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -127,6 +128,13 @@ export interface PackageOptions {
 
   /** macOS bundle metadata for Info.plist generation. */
   macos?: MacosBundleMetadata;
+
+  /**
+   * Produce a Linux AppDir instead of a raw executable.
+   * Only valid for Linux targets. The output path becomes the .AppDir
+   * directory (e.g., dist/MyApp.AppDir/).
+   */
+  appDir?: boolean;
 }
 
 export interface PackageResult {
@@ -196,6 +204,7 @@ export interface PackageMultipleOptions {
   metadata?: ExeMetadata;
   appBundle?: boolean;
   macos?: MacosBundleMetadata;
+  appDir?: boolean;
 }
 
 export interface PackageMultipleResult {
@@ -413,9 +422,11 @@ async function packageAppForTarget(
     const slash = targetSpec.platform === 'win' ? '\\' : '/';
     const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
 
-    // In app-bundle mode, write the raw executable to a temp path
-    const producerOutput = options.appBundle && targetSpec.platform === 'macos'
-      ? path.join(os.tmpdir(), `hakobu-ab-${manifest.appId}-${Date.now()}`)
+    // In app-bundle/appdir mode, write the raw executable to a temp path
+    const usesTempOutput = (options.appBundle && targetSpec.platform === 'macos')
+      || (options.appDir && isLinuxPlatform(targetSpec.platform));
+    const producerOutput = usesTempOutput
+      ? path.join(os.tmpdir(), `hakobu-wrap-${manifest.appId}-${Date.now()}`)
       : outputPath;
     fs.mkdirSync(path.dirname(path.resolve(producerOutput)), { recursive: true });
 
@@ -488,6 +499,15 @@ async function packageAppForTarget(
       }
     } else {
       await plusx(target.output);
+
+      // AppDir wrapping (Linux only, opt-in)
+      if (options.appDir && isLinuxPlatform(targetSpec.platform)) {
+        finalOutputPath = createAppDir({
+          executablePath: target.output,
+          outputPath: outputPath,
+          appName: manifest.appId,
+        });
+      }
     }
 
     // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
@@ -532,6 +552,17 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
       throw new Error(
         `--app-bundle is only supported for macOS targets (got ${targetSpec.platform}).\n` +
         'macOS .app bundles require a Mach-O executable.'
+      );
+    }
+  }
+
+  // ── AppDir validation ──
+  if (options.appDir) {
+    const targetSpec = parseTarget(options.target || '');
+    if (!isLinuxPlatform(targetSpec.platform)) {
+      throw new Error(
+        `--appdir is only supported for Linux targets (got ${targetSpec.platform}).\n` +
+        'AppDir requires an ELF executable.'
       );
     }
   }
@@ -680,9 +711,11 @@ async function packageAppInner(
 
     // ── 6. Build target object for producer ──
     const requestedOutput = options.output || defaultOutputPath(manifest.appId, targetSpec);
-    // In app-bundle mode, the producer writes to a temp file; createAppBundle moves it into the .app
-    const outputPath = options.appBundle && targetSpec.platform === 'macos'
-      ? path.join(os.tmpdir(), `hakobu-ab-${manifest.appId}-${Date.now()}`)
+    // In app-bundle/appdir mode, the producer writes to a temp file; wrapper moves it in
+    const usesTempOutput = (options.appBundle && targetSpec.platform === 'macos')
+      || (options.appDir && isLinuxPlatform(targetSpec.platform));
+    const outputPath = usesTempOutput
+      ? path.join(os.tmpdir(), `hakobu-wrap-${manifest.appId}-${Date.now()}`)
       : requestedOutput;
     fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
@@ -772,6 +805,15 @@ async function packageAppInner(
       }
     } else {
       await plusx(target.output);
+
+      // AppDir wrapping (Linux only, opt-in)
+      if (options.appDir && isLinuxPlatform(targetSpec.platform)) {
+        finalOutputPath = createAppDir({
+          executablePath: target.output,
+          outputPath: requestedOutput,
+          appName: manifest.appId,
+        });
+      }
     }
 
     shutdownFabricator();

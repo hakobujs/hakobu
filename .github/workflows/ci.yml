@@ -112,6 +112,9 @@ jobs:
       - name: Full fixture matrix (node + packaged)
         run: node fixtures/run.js
 
+      - name: AppDir verification
+        run: node fixtures/test-appdir.js
+
   # ────────────────────────────────────────────────────────────
   # Windows — full packaged fixture matrix
   # Packages each fixture into a .exe and runs the comparison

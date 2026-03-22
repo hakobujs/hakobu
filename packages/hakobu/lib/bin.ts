@@ -39,6 +39,8 @@ Advanced:
   --bytecode          Compile JS to V8 bytecode before packaging
   --app-bundle        Wrap macOS output in a .app bundle (macOS only)
                       Output path becomes the .app directory
+  --appdir            Wrap Linux output in an AppDir (Linux only)
+                      Output path becomes the .AppDir directory
 
 macOS bundle metadata (used with --app-bundle):
   --bundle-id <id>      CFBundleIdentifier (e.g., com.example.my-app)
@@ -117,7 +119,7 @@ async function main() {
              'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright',
              'macos-icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
-              'no-native-build', 'notarize', 'app-bundle'],
+              'no-native-build', 'notarize', 'app-bundle', 'appdir'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
@@ -189,8 +191,9 @@ async function main() {
       if (argv['win-cert']) options.winCertPath = argv['win-cert'];
       if (argv['win-cert-password']) options.winCertPassword = argv['win-cert-password'];
 
-      // App bundle
+      // App bundle / AppDir
       if (argv['app-bundle']) options.appBundle = true;
+      if (argv.appdir) options.appDir = true;
 
       // macOS bundle metadata — CLI flags override config
       const cliMacos: Record<string, string> = {};
@@ -233,6 +236,7 @@ async function main() {
           metadata: options.metadata,
           appBundle: options.appBundle,
           macos: options.macos,
+          appDir: options.appDir,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

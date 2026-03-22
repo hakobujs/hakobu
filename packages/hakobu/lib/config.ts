@@ -87,6 +87,12 @@ export interface HakobuConfig {
     /** Path to a .icns file to embed as the application icon. */
     icon?: string;
   };
+
+  /**
+   * Produce a Linux AppDir instead of a raw executable.
+   * Only valid for Linux targets.
+   */
+  appDir?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -300,6 +306,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       metadata,
       appBundle: hakobuConfig?.appBundle,
       macos: hakobuConfig?.macos,
+      appDir: hakobuConfig?.appDir,
     },
     warnings,
   };

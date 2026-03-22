@@ -626,14 +626,23 @@
     - **Output:** `fixtures/test-app-bundle.js`, `.github/workflows/ci.yml`
 
 - [ ] 25. Linux desktop and distribution artifacts
-  - [ ] 25.1 Generate AppDir-style directory output
-    - Add an `--appdir` (or `--format appdir`) output mode for Linux targets
-    - Generate the standard AppDir layout:
-      `<AppDir>/usr/bin/<binary>`, `<AppDir>/usr/share/applications/<name>.desktop`,
-      `<AppDir>/usr/share/icons/hicolor/<size>/apps/<name>.png`,
-      `<AppDir>/AppRun` (launcher script)
+  - [x] 25.1 Generate AppDir-style directory output
+    - Added `--appdir` CLI flag and `appDir` config option
+    - When enabled for Linux targets, produces AppDir layout:
+      `MyApp.AppDir/AppRun`, `usr/bin/<binary>`,
+      `usr/share/applications/`, `usr/share/icons/hicolor/`,
+      `usr/share/metainfo/`
+    - AppRun is a shell launcher that execs `usr/bin/<binary>`
+    - Producer writes to temp path; `createAppDir()` moves executable in
+    - `--output` specifies the .AppDir path; `.AppDir` auto-appended
     - Raw executable output remains the default; AppDir is opt-in
+    - Clear error if `--appdir` used with non-Linux targets
+    - Verification: 10 structure + validation tests pass on macOS;
+      full packaging tests run on Linux CI
+    - Added to CI: Linux fixtures job runs `test-appdir.js`
     - _Depends on: 10.1_
+    - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-appdir.js`, `.github/workflows/ci.yml`
 
   - [ ] 25.2 Generate `.desktop` file from metadata
     - Produce a valid `.desktop` entry from config / CLI metadata:
