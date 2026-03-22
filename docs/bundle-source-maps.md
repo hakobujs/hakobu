@@ -137,16 +137,11 @@ The mechanism is identical for both modes. Each JS file gets a corresponding
   (playwright-core stubs, etc.) modify the bundle output after Rolldown
   generates the source map. The source map will be slightly inaccurate for
   patched lines. This is acceptable — patches are small and targeted.
-- **Patched base binary limitation.** The patched Node 24.14.0 base binary's
-  V8 modifications (for `sourceless` bytecode support) interfere with
-  `--enable-source-maps` for modules loaded through `registerHooks`.
-  The `EnableCompilationForSourcelessUse()` / `DisableCompilationForSourcelessUse()`
-  functions toggle global V8 flags (`lazy`, `predictable`) that affect source
-  position tracking. Verified: stock Node 24.14.0 resolves source maps
-  correctly through the same `registerHooks` + inline map path. This is a
-  V8 patch side effect, not a Hakobu packager issue or a Node version issue.
-  Will resolve when a future base binary line (e.g., Node 25) drops or
-  refines the `sourceless` V8 patches.
+- **`NODE_OPTIONS=--enable-source-maps` has no effect.** The patched base
+  binary is built with `--without-node-options` which disables `NODE_OPTIONS`
+  processing entirely. Source maps are instead enabled programmatically by
+  the ESM shim via `process.setSourceMapsEnabled(true)` before any module
+  loading, so they work automatically for bundled ESM modules.
 - **Native mode source maps.** This contract applies only to bundle mode.
   Native mode packages source files directly and doesn't transform them,
   so source maps are not needed.

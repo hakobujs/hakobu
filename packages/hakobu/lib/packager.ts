@@ -654,6 +654,15 @@ function buildEsmBridge(manifest: PackagingManifest): {
 
   const shimSource = `'use strict';
 // Hakobu ESM Bridge — bootstraps ESM loading from the inherited CJS VFS
+
+// Enable source maps before any module loading. The patched base binary is
+// built with --without-node-options which ignores NODE_OPTIONS, so
+// --enable-source-maps via env has no effect. This programmatic call
+// ensures source maps work when .map files are present in the snapshot.
+if (typeof process.setSourceMapsEnabled === 'function') {
+  process.setSourceMapsEnabled(true);
+}
+
 var { registerHooks } = require('node:module');
 var fs = require('fs');
 var pathMod = require('path');
