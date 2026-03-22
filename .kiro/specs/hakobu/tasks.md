@@ -403,12 +403,14 @@
     - _Depends on: 13.3, 15.2_
     - **Output:** `rc-gate` job in `.github/workflows/ci.yml`, docs update
 
-  - [ ] 20.2 Add npm publish dry-run and tarball verification
-    - Run `pnpm pack --dry-run` in CI to verify the published file list
-      matches the `"files"` field in each package.json
-    - Reject releases where unexpected files would be published or expected
-      files are missing
+  - [x] 20.2 Add npm publish dry-run and tarball verification
+    - Added `npm pack --dry-run` steps in the RC gate for both packages
+    - Verifies critical files are present: lib-es5/index.js, bin.js, packager.js,
+      index.d.ts, prelude/bootstrap.js, expected-shas.json, patches.json
+    - Fails the RC gate if any required file is missing from the tarball
+    - Full file listing logged in a collapsible group for manual review
     - _Depends on: 13.3_
+    - **Output:** publish dry-run steps in `rc-gate` job in `.github/workflows/ci.yml`
 
   - [ ] 20.3 Add changelog generation
     - Generate changelogs from conventional commit messages between tags

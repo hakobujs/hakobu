@@ -181,6 +181,40 @@ jobs:
       - name: Multi-target verification
         run: node fixtures/test-multi-target.js
 
+      - name: Publish dry-run — @hakobu/hakobu-fetch
+        working-directory: packages/hakobu-fetch
+        run: |
+          echo "::group::npm pack --dry-run"
+          npm pack --dry-run 2>&1
+          echo "::endgroup::"
+
+          # Verify critical files are present
+          PACK_LIST=$(npm pack --dry-run 2>&1)
+          for required in "lib-es5/index.js" "lib-es5/expected-shas.json" "patches/patches.json"; do
+            if ! echo "$PACK_LIST" | grep -q "$required"; then
+              echo "::error::Missing required file in @hakobu/hakobu-fetch tarball: $required"
+              exit 1
+            fi
+          done
+          echo "hakobu-fetch tarball: OK"
+
+      - name: Publish dry-run — @hakobu/hakobu
+        working-directory: packages/hakobu
+        run: |
+          echo "::group::npm pack --dry-run"
+          npm pack --dry-run 2>&1
+          echo "::endgroup::"
+
+          # Verify critical files are present
+          PACK_LIST=$(npm pack --dry-run 2>&1)
+          for required in "lib-es5/bin.js" "lib-es5/packager.js" "lib-es5/index.d.ts" "prelude/bootstrap.js"; do
+            if ! echo "$PACK_LIST" | grep -q "$required"; then
+              echo "::error::Missing required file in @hakobu/hakobu tarball: $required"
+              exit 1
+            fi
+          done
+          echo "hakobu tarball: OK"
+
       - name: RC summary
         run: |
           echo "## Release Candidate Gate" >> "$GITHUB_STEP_SUMMARY"
@@ -194,5 +228,7 @@ jobs:
           echo "| Source maps | Passed |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Bytecode | Passed |" >> "$GITHUB_STEP_SUMMARY"
           echo "| Multi-target | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Publish dry-run (hakobu-fetch) | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Publish dry-run (hakobu) | Passed |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "**This commit is release-candidate ready.**" >> "$GITHUB_STEP_SUMMARY"
