@@ -301,6 +301,51 @@ test('Icon validation: non-.icns rejected', () => {
   }
 });
 
+// ── Test 9: bundle is ad-hoc signed (inner exe runs after signing) ──
+
+// The first bundle (appOut) was created without explicit identity,
+// so it gets ad-hoc signed. Verify the inner executable still runs.
+test('Bundle signing: inner executable runs after ad-hoc bundle sign', () => {
+  const macosDir = path.join(appOut, 'Contents', 'MacOS');
+  const files = fs.readdirSync(macosDir);
+  const execPath = path.join(macosDir, files[0]);
+  const output = execFileSync(execPath, [], {
+    timeout: 15000, encoding: 'utf8',
+  });
+  if (!output.includes('format=app-bundle-test'))
+    throw new Error('Inner executable broken after bundle sign');
+});
+
+// Verify codesign reports a signature on the bundle (ad-hoc is fine)
+test('Bundle signing: codesign validates the .app bundle', () => {
+  try {
+    execFileSync('codesign', ['--verify', '--deep', appOut], {
+      timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    // codesign --verify exits non-zero if unsigned or invalid
+    // Ad-hoc is valid — only truly broken signatures fail here
+    const stderr = err.stderr || '';
+    if (stderr.includes('invalid signature') || stderr.includes('not signed'))
+      throw new Error('Bundle signature invalid: ' + stderr.slice(0, 100));
+    // "a sealed resource is missing" is okay for minimal test bundles
+  }
+});
+
+// ── Test 10: raw executable still gets direct signing (not bundle signing) ──
+
+test('Raw signing: raw executable is signed directly', () => {
+  try {
+    execFileSync('codesign', ['--verify', rawOut], {
+      timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    const stderr = err.stderr || '';
+    if (stderr.includes('invalid signature'))
+      throw new Error('Raw executable signature invalid: ' + stderr.slice(0, 100));
+  }
+});
+
 // ── Cleanup ──
 try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
 

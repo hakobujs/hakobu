@@ -131,6 +131,43 @@ Example workflow step:
     npx hakobu ./my-app --output ./dist/app --notarize
 ```
 
+## App Bundle Mode (`--app-bundle`)
+
+When `--app-bundle` is used with signing/notarization, the signing
+target changes from the raw executable to the `.app` bundle:
+
+| Step | Raw executable | `.app` bundle |
+|------|---------------|---------------|
+| Mach-O patch | Executable | Inner executable (before wrapping) |
+| Signing target | Executable | `.app` directory (`codesign --deep`) |
+| Notarization zip | Executable zipped | `.app` directory zipped |
+| Stapling target | Executable | `.app` directory |
+
+### Example: signed and notarized `.app` bundle
+
+```bash
+export HAKOBU_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export HAKOBU_APPLE_ID="you@example.com"
+export HAKOBU_APPLE_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+export HAKOBU_APPLE_TEAM_ID="ABCDE12345"
+
+hakobu ./my-app --app-bundle --output ./dist/MyApp.app --notarize
+```
+
+This will:
+1. Package the executable
+2. Patch the Mach-O `__LINKEDIT` segment
+3. Wrap into `MyApp.app/Contents/MacOS/<binary>`
+4. Sign the `.app` bundle with `codesign --deep` (hardened runtime + timestamp)
+5. Zip the `.app`, submit to Apple notary, wait for approval
+6. Staple the notarization ticket to the `.app` bundle
+
+### Unsigned bundles
+
+When no signing identity is configured, the `.app` bundle receives
+an ad-hoc signature (`codesign --deep --sign -`). This is sufficient
+for local testing but will trigger Gatekeeper warnings when distributed.
+
 ## Behavior When Credentials Are Absent
 
 | Scenario | Behavior |
@@ -139,6 +176,8 @@ Example workflow step:
 | `--sign-identity` but no `--notarize` | Developer ID signed, not notarized |
 | `--notarize` without credentials | Error with message listing missing env vars |
 | Non-macOS target with `--notarize` | Flag is ignored (notarization is macOS-only) |
+| `--app-bundle` without signing identity | Bundle is ad-hoc signed |
+| `--app-bundle` with `--notarize` | Bundle is the signed/notarized artifact |
 
 ## Troubleshooting
 

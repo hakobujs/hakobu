@@ -221,9 +221,115 @@ async function notarizeMachOExecutable(opts: NotarizeOptions): Promise<void> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// App bundle signing
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Sign a macOS .app bundle.
+ *
+ * Uses `codesign --deep` to recursively sign all code in the bundle.
+ * This replaces any ad-hoc signature on the inner executable with a
+ * proper bundle signature.
+ *
+ * Identity resolution is the same as signMachOExecutable.
+ */
+function signAppBundle(bundlePath: string, identity?: string) {
+  const id = identity || process.env.HAKOBU_SIGN_IDENTITY || '-';
+
+  if (id === '-') {
+    // Ad-hoc: sign the bundle without timestamp/hardened runtime
+    try {
+      execFileSync('codesign', ['--deep', '--force', '--sign', '-', bundlePath], {
+        stdio: 'inherit',
+      });
+    } catch {
+      // Non-fatal for ad-hoc — bundle may still work
+    }
+    return;
+  }
+
+  execFileSync('codesign', [
+    '--deep', '--force',
+    '--sign', id,
+    '--options', 'runtime',
+    '--timestamp',
+    bundlePath,
+  ], { stdio: 'inherit' });
+}
+
+/**
+ * Submit a signed macOS .app bundle for Apple notarization.
+ *
+ * Similar to notarizeMachOExecutable but targets a .app directory:
+ *   1. Zips the .app bundle (ditto preserves bundle structure)
+ *   2. Submits to Apple via notarytool
+ *   3. Staples the ticket to the .app bundle
+ */
+async function notarizeAppBundle(opts: NotarizeOptions): Promise<void> {
+  const {
+    executable: bundlePath,
+    appleId = process.env.HAKOBU_APPLE_ID,
+    applePassword = process.env.HAKOBU_APPLE_PASSWORD,
+    teamId = process.env.HAKOBU_APPLE_TEAM_ID,
+  } = opts;
+
+  if (!appleId || !applePassword || !teamId) {
+    const missing = [];
+    if (!appleId) missing.push('HAKOBU_APPLE_ID');
+    if (!applePassword) missing.push('HAKOBU_APPLE_PASSWORD');
+    if (!teamId) missing.push('HAKOBU_APPLE_TEAM_ID');
+    throw new Error(
+      `Cannot notarize: missing ${missing.join(', ')}. ` +
+      `Set these env vars or pass them as options. See docs/macos-notarization.md.`
+    );
+  }
+
+  const zipPath = bundlePath + '.zip';
+  log.info('Creating zip of .app bundle for notarization...');
+  execFileSync('ditto', ['-c', '-k', '--keepParent', bundlePath, zipPath], {
+    stdio: 'pipe',
+  });
+
+  try {
+    log.info('Submitting .app bundle to Apple notary service...');
+    const { stdout } = await execFileAsync('xcrun', [
+      'notarytool', 'submit', zipPath,
+      '--apple-id', appleId,
+      '--password', applePassword,
+      '--team-id', teamId,
+      '--wait',
+    ], { timeout: 600000 });
+
+    log.info(`Notarization result:\n${stdout}`);
+
+    if (stdout.includes('status: Invalid') || stdout.includes('status: Rejected')) {
+      throw new Error(
+        'Apple notarization was rejected. Run:\n' +
+        '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
+        'to see the full rejection reason.'
+      );
+    }
+
+    log.info('Stapling notarization ticket to .app bundle...');
+    execFileSync('xcrun', ['stapler', 'staple', bundlePath], {
+      stdio: 'inherit',
+    });
+
+    log.info('Notarization complete — .app bundle is notarized and stapled.');
+  } finally {
+    try {
+      const fs = require('fs');
+      fs.unlinkSync(zipPath);
+    } catch {}
+  }
+}
+
 export {
   patchMachOExecutable,
   removeMachOExecutableSignature,
   signMachOExecutable,
   notarizeMachOExecutable,
+  signAppBundle,
+  notarizeAppBundle,
 };

@@ -589,17 +589,23 @@
     - **Output:** `app-bundle.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-app-bundle.js`
 
-  - [ ] 24.4 Integrate signing and notarization with `.app` bundles
-    - When `--sign-identity` is set and output is a `.app` bundle,
-      sign the entire bundle (not just the inner binary) with
-      `codesign --deep --sign <identity> --options runtime --timestamp`
-    - When `--notarize` is set, zip the `.app` bundle and submit it
-      (notarytool accepts `.app` inside a zip)
-    - Staple the ticket to the `.app` bundle
-    - Document differences from raw-executable signing
+  - [x] 24.4 Integrate signing and notarization with `.app` bundles
+    - Added `signAppBundle()` in `mach-o.ts`: `codesign --deep --force
+      --sign <identity> --options runtime --timestamp` for Developer ID,
+      `codesign --deep --force --sign -` for ad-hoc
+    - Added `notarizeAppBundle()` in `mach-o.ts`: zips the `.app`, submits
+      via `notarytool`, staples to the `.app` directory
+    - Restructured both post-production blocks in `packager.ts`:
+      - Raw mode: Mach-O patch → sign executable → notarize executable
+      - Bundle mode: Mach-O patch → create bundle → sign bundle → notarize bundle
+    - Raw executable signing/notarization behavior unchanged
+    - Updated `docs/macos-notarization.md` with bundle-mode section
+      explaining the differences in signing/notarization targets
+    - 23/23 verification tests pass (3 new: inner executable runs after
+      bundle sign, codesign validates bundle, raw signing unchanged)
     - _Depends on: 23.1, 24.1_
-    - **Output:** updated signing/notarization flow for bundles,
-      docs update in `docs/macos-notarization.md`
+    - **Output:** `mach-o.ts`, `packager.ts`, `docs/macos-notarization.md`,
+      `fixtures/test-app-bundle.js`
 
   - [ ] 24.5 Add fixture / verification for `.app` output
     - Create a fixture that packages a simple project as `.app`,

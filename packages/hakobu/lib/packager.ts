@@ -34,7 +34,10 @@ import packer from './packer';
 import producer from './producer';
 import { CompressType } from './compress_type';
 import { plusx } from './chmod';
-import { patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable } from './mach-o';
+import {
+  patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable,
+  signAppBundle, notarizeAppBundle,
+} from './mach-o';
 import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-sign';
 import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
@@ -441,15 +444,36 @@ async function packageAppForTarget(
     });
 
     // Post-production
+    let finalOutputPath = path.resolve(outputPath);
+
     if (targetSpec.platform === 'macos') {
+      // Mach-O patch is always needed (fixes __LINKEDIT after payload injection)
       const buf = patchMachOExecutable(fs.readFileSync(target.output));
       fs.writeFileSync(target.output, buf);
-      try { signMachOExecutable(target.output, options.signIdentity); } catch {}
-
-      if (options.notarize) {
-        await notarizeMachOExecutable({ executable: target.output });
-      }
       await plusx(target.output);
+
+      if (options.appBundle) {
+        // Bundle mode: wrap first, then sign/notarize the bundle
+        finalOutputPath = createAppBundle({
+          executablePath: target.output,
+          outputPath: outputPath,
+          appName: manifest.appId,
+          macos: options.macos,
+        });
+
+        try { signAppBundle(finalOutputPath, options.signIdentity); } catch {}
+
+        if (options.notarize) {
+          await notarizeAppBundle({ executable: finalOutputPath });
+        }
+      } else {
+        // Raw executable mode: sign/notarize the executable directly
+        try { signMachOExecutable(target.output, options.signIdentity); } catch {}
+
+        if (options.notarize) {
+          await notarizeMachOExecutable({ executable: target.output });
+        }
+      }
     } else if (targetSpec.platform === 'win') {
       // Metadata injection must happen BEFORE signing
       if (options.metadata) {
@@ -464,17 +488,6 @@ async function packageAppForTarget(
       }
     } else {
       await plusx(target.output);
-    }
-
-    // App bundle wrapping (macOS only, opt-in)
-    let finalOutputPath = path.resolve(outputPath);
-    if (options.appBundle && targetSpec.platform === 'macos') {
-      finalOutputPath = createAppBundle({
-        executablePath: target.output,
-        outputPath: outputPath,
-        appName: manifest.appId,
-        macos: options.macos,
-      });
     }
 
     // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
@@ -703,22 +716,48 @@ async function packageAppInner(
     });
 
     // ── 8. Post-production: signing + chmod ──
+    let finalOutputPath = path.resolve(requestedOutput);
+
     if (targetSpec.platform === 'macos') {
       // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
       const buf = patchMachOExecutable(fs.readFileSync(target.output));
       fs.writeFileSync(target.output, buf);
-      try {
-        signMachOExecutable(target.output, options.signIdentity);
-      } catch {
-        if (targetSpec.arch === 'arm64') {
-          log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+      await plusx(target.output);
+
+      if (options.appBundle) {
+        // Bundle mode: wrap first, then sign/notarize the bundle
+        finalOutputPath = createAppBundle({
+          executablePath: target.output,
+          outputPath: requestedOutput,
+          appName: manifest.appId,
+          macos: options.macos,
+        });
+
+        try {
+          signAppBundle(finalOutputPath, options.signIdentity);
+        } catch {
+          if (targetSpec.arch === 'arm64') {
+            log.warn('Unable to sign the macOS app bundle — it may not run on ARM64.');
+          }
+        }
+
+        if (options.notarize) {
+          await notarizeAppBundle({ executable: finalOutputPath });
+        }
+      } else {
+        // Raw executable mode: sign/notarize the executable directly
+        try {
+          signMachOExecutable(target.output, options.signIdentity);
+        } catch {
+          if (targetSpec.arch === 'arm64') {
+            log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+          }
+        }
+
+        if (options.notarize) {
+          await notarizeMachOExecutable({ executable: target.output });
         }
       }
-
-      if (options.notarize) {
-        await notarizeMachOExecutable({ executable: target.output });
-      }
-      await plusx(target.output);
     } else if (targetSpec.platform === 'win') {
       // Metadata injection must happen BEFORE signing
       if (options.metadata) {
@@ -733,17 +772,6 @@ async function packageAppInner(
       }
     } else {
       await plusx(target.output);
-    }
-
-    // App bundle wrapping (macOS only, opt-in)
-    let finalOutputPath = path.resolve(requestedOutput);
-    if (options.appBundle && targetSpec.platform === 'macos') {
-      finalOutputPath = createAppBundle({
-        executablePath: target.output,
-        outputPath: requestedOutput,
-        appName: manifest.appId,
-        macos: options.macos,
-      });
     }
 
     shutdownFabricator();
