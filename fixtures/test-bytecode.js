@@ -134,9 +134,208 @@ try {
   failed += 2;
 }
 
-// ── Test 4: Source-only (no --bytecode) still works ──
+// ── Test 4: Multi-module CJS with circular requires + bytecode ──
+//
+// Module graph:
+//   index → registry → processor → registry (circular)
+//                    ↘ utils
+//          → processor
+//          → config.json
+//
+// Circular require semantics: when processor requires registry during
+// registry's own initialization, it sees registry's *partial* exports
+// (only what was assigned before the circular require point). This is
+// a core Node.js CJS behavior that bytecode must preserve.
+
+const circDir = tmpProject('circular', {
+  'package.json': '{ "name": "bc-circular", "version": "1.0.0", "main": "index.js" }',
+
+  // utils.js — no circular deps, required by both registry and processor
+  'utils.js': [
+    "'use strict';",
+    "let callCount = 0;",
+    "exports.track = function(label) { callCount++; return label + ':' + callCount; };",
+    "exports.getCount = function() { return callCount; };",
+  ].join('\n'),
+
+  // registry.js — exports.earlyValue BEFORE requiring processor,
+  //   then exports.lateValue AFTER. When processor requires registry
+  //   mid-init, it only sees earlyValue.
+  'registry.js': [
+    "'use strict';",
+    "const utils = require('./utils');",
+    "exports.earlyValue = utils.track('registry-early');",
+    "// This triggers the circular require — processor will see partial registry",
+    "const processor = require('./processor');",
+    "exports.lateValue = utils.track('registry-late');",
+    "exports.processorSawEarly = processor.registrySnapshot;",
+  ].join('\n'),
+
+  // processor.js — requires registry (circular), captures what it can see
+  'processor.js': [
+    "'use strict';",
+    "const utils = require('./utils');",
+    "const registry = require('./registry'); // circular: registry is mid-init",
+    "exports.ownValue = utils.track('processor');",
+    "// registry.earlyValue exists (set before circular point)",
+    "// registry.lateValue does NOT exist yet (set after circular point)",
+    "exports.registrySnapshot = {",
+    "  hasEarly: 'earlyValue' in registry,",
+    "  hasLate: 'lateValue' in registry,",
+    "  earlyVal: registry.earlyValue,",
+    "};",
+    "exports.transform = function(x) { return x * 2; };",
+  ].join('\n'),
+
+  // config.json — verify JSON still works alongside bytecode modules
+  'config.json': '{ "mode": "bytecode-circular", "depth": 3 }',
+
+  // index.js — entry point, exercises the full graph
+  'index.js': [
+    "'use strict';",
+    "const registry = require('./registry');",
+    "const processor = require('./processor');",
+    "const config = require('./config.json');",
+    "const utils = require('./utils');",
+    "",
+    "// Verify initialization order via utils.track call count",
+    "console.log('format=circular-bytecode');",
+    "",
+    "// earlyValue was the 1st track() call",
+    "console.log('early=' + JSON.stringify(registry.earlyValue));",
+    "",
+    "// processor.ownValue was the 3rd track() call",
+    "console.log('processor=' + JSON.stringify(processor.ownValue));",
+    "",
+    "// lateValue was the 4th track() call",
+    "console.log('late=' + JSON.stringify(registry.lateValue));",
+    "",
+    "// Circular snapshot: processor saw earlyValue but NOT lateValue",
+    "console.log('circ_has_early=' + JSON.stringify(processor.registrySnapshot.hasEarly));",
+    "console.log('circ_has_late=' + JSON.stringify(processor.registrySnapshot.hasLate));",
+    "console.log('circ_early_val=' + JSON.stringify(processor.registrySnapshot.earlyVal));",
+    "",
+    "// Cross-confirmed via registry's own view of what processor saw",
+    "console.log('reg_saw_early=' + JSON.stringify(registry.processorSawEarly.hasEarly));",
+    "console.log('reg_saw_late=' + JSON.stringify(registry.processorSawEarly.hasLate));",
+    "",
+    "// Function call across modules",
+    "console.log('transform=' + JSON.stringify(processor.transform(21)));",
+    "",
+    "// JSON data",
+    "console.log('json_mode=' + JSON.stringify(config.mode));",
+    "console.log('json_depth=' + JSON.stringify(config.depth));",
+    "",
+    "// Total track() calls: registry-early(1), processor(2 — utils re-required,",
+    "// but cached; processor track is 2nd), processor.registrySnapshot computed,",
+    "// registry-late(3 — but actually 4th because processor's track ran as 3rd)",
+    "// Let's just report final count",
+    "console.log('total_calls=' + JSON.stringify(utils.getCount()));",
+  ].join('\n'),
+});
+
+const circOut = path.join(circDir, 'circ-out' + ext);
+
+// First, run with plain node to capture expected values
+let circNodeOutput;
+try {
+  circNodeOutput = execFileSync(process.execPath, [path.join(circDir, 'index.js')], {
+    timeout: 15000, encoding: 'utf8', cwd: circDir,
+  });
+} catch (err) {
+  console.log(`  XX  Circular CJS (node baseline) — ${err.message.split('\n')[0]}`);
+  failed += 7;
+  circNodeOutput = null;
+}
+
+if (circNodeOutput) {
+  // Parse node output for comparison
+  const nodeLines = {};
+  for (const line of circNodeOutput.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq !== -1) nodeLines[line.slice(0, eq)] = line.slice(eq + 1);
+  }
+
+  // Now package with --bytecode and compare
+  try {
+    execFileSync(process.execPath, [
+      HAKOBU_BIN, circDir, '--bytecode', '--output', circOut,
+    ], { timeout: 300000, encoding: 'utf8' });
+
+    const circOutput = execFileSync(circOut, [], {
+      timeout: 15000, encoding: 'utf8',
+    });
+
+    const bcLines = {};
+    for (const line of circOutput.split('\n')) {
+      const eq = line.indexOf('=');
+      if (eq !== -1) bcLines[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+
+    test('Circular bytecode: packages successfully', () => {
+      if (!fs.existsSync(circOut)) throw new Error('Output not found');
+    });
+
+    test('Circular bytecode: initialization order preserved', () => {
+      if (bcLines.early !== nodeLines.early)
+        throw new Error(`early: node=${nodeLines.early} bc=${bcLines.early}`);
+      if (bcLines.processor !== nodeLines.processor)
+        throw new Error(`processor: node=${nodeLines.processor} bc=${bcLines.processor}`);
+      if (bcLines.late !== nodeLines.late)
+        throw new Error(`late: node=${nodeLines.late} bc=${bcLines.late}`);
+    });
+
+    test('Circular bytecode: partial exports visible during circular require', () => {
+      if (bcLines.circ_has_early !== 'true')
+        throw new Error('earlyValue not visible during circular require');
+      if (bcLines.circ_has_late !== 'false')
+        throw new Error('lateValue should NOT be visible during circular require');
+    });
+
+    test('Circular bytecode: cross-module function calls work', () => {
+      if (bcLines.transform !== '42')
+        throw new Error(`transform(21) = ${bcLines.transform}, expected 42`);
+    });
+
+    test('Circular bytecode: JSON require works alongside bytecode', () => {
+      if (bcLines.json_mode !== '"bytecode-circular"')
+        throw new Error(`json_mode = ${bcLines.json_mode}`);
+      if (bcLines.json_depth !== '3')
+        throw new Error(`json_depth = ${bcLines.json_depth}`);
+    });
+
+    test('Circular bytecode: output matches node baseline exactly', () => {
+      // Compare all key=value pairs
+      const keys = ['format', 'early', 'processor', 'late', 'circ_has_early',
+        'circ_has_late', 'circ_early_val', 'reg_saw_early', 'reg_saw_late',
+        'transform', 'json_mode', 'json_depth', 'total_calls'];
+      const diffs = [];
+      for (const k of keys) {
+        if (bcLines[k] !== nodeLines[k]) {
+          diffs.push(`${k}: node=${nodeLines[k]} bc=${bcLines[k]}`);
+        }
+      }
+      if (diffs.length > 0) throw new Error('Drift:\n      ' + diffs.join('\n      '));
+    });
+
+    test('Circular bytecode: total call count matches (init ran exactly once per module)', () => {
+      if (bcLines.total_calls !== nodeLines.total_calls)
+        throw new Error(`total_calls: node=${nodeLines.total_calls} bc=${bcLines.total_calls}`);
+    });
+
+  } catch (err) {
+    if (err.message && !err.message.startsWith('total_calls') && !err.message.startsWith('Drift')) {
+      const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+      console.log(`  XX  Circular bytecode packaging — ${msg}`);
+      failed += 7;
+    }
+  }
+}
+
+// ── Test 5: Source-only (no --bytecode) still works ──
 
 const srcOut = path.join(cjsDir, 'src-out' + ext);
+
 try {
   execFileSync(process.execPath, [
     HAKOBU_BIN, cjsDir, '--output', srcOut,
@@ -157,6 +356,7 @@ try {
 // ── Cleanup ──
 try { fs.rmSync(cjsDir, { recursive: true, force: true }); } catch {}
 try { fs.rmSync(esmDir, { recursive: true, force: true }); } catch {}
+try { fs.rmSync(circDir, { recursive: true, force: true }); } catch {}
 
 console.log(`\n  ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

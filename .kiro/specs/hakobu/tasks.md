@@ -450,7 +450,7 @@
     - _Depends on: 21.1_
     - **Output:** offline gate in `packages/hakobu-fetch/lib/index.ts`, docs update
 
-- [ ] 22. Broader real-world fixture coverage
+- [x] 22. Broader real-world fixture coverage
   - [x] 22.1 Add a real npm-dependency fixture
     - Added `fixtures/npm-dependency/` with picocolors + minimist from npm
     - Verifies: module loaded, functions work, arg parsing correct,
@@ -473,11 +473,16 @@
     - _Depends on: 9.1, 12.2_
     - **Output:** `fixtures/native-addon/`, build support in `fixtures/run.js`
 
-  - [ ] 22.3 Add a bytecode + CJS multi-module fixture
-    - Package a non-trivial CJS project with `--bytecode` that has multiple
-      internal modules, circular requires, and JSON loading
-    - Verify correct execution and compare output against source-only mode
+  - [x] 22.3 Add a bytecode + CJS multi-module fixture
+    - Added circular-require multi-module test to `fixtures/test-bytecode.js`
+    - Module graph: index → registry ↔ processor (circular), utils, config.json
+    - Verifies: initialization order preserved under bytecode, CJS partial
+      exports visible during circular require (earlyValue yes, lateValue no),
+      cross-module function calls, JSON loading alongside bytecode, and
+      exact output match between bytecode and plain Node baseline
+    - 15/15 bytecode tests pass (up from 8), 7 new circular tests
     - _Depends on: 19.4_
+    - **Output:** circular bytecode tests in `fixtures/test-bytecode.js`
 
 - [ ] 23. Artifact signing and distribution ergonomics
   - [ ] 23.1 Add macOS notarization support
