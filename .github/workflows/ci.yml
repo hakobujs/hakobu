@@ -143,3 +143,56 @@ jobs:
 
       - name: Full fixture matrix (node + packaged)
         run: node fixtures/run.js
+
+  # ────────────────────────────────────────────────────────────
+  # Release-candidate gate — single green/red signal for RC readiness
+  #
+  # This job runs AFTER all platform fixture jobs pass. It runs
+  # the specialized verification tests (source maps, bytecode,
+  # multi-target) that are not part of the fixture matrix.
+  #
+  # A commit is RC-ready when this job is green.
+  # ────────────────────────────────────────────────────────────
+  rc-gate:
+    name: RC Gate
+    runs-on: macos-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [fast, fixtures-macos, fixtures-linux, fixtures-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Source map verification
+        run: node fixtures/test-sourcemap.js
+
+      - name: Bytecode verification
+        run: node fixtures/test-bytecode.js
+
+      - name: Multi-target verification
+        run: node fixtures/test-multi-target.js
+
+      - name: RC summary
+        run: |
+          echo "## Release Candidate Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Build & Unit Tests | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Fixtures (macOS) | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Fixtures (Linux) | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Fixtures (Windows) | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Source maps | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Bytecode | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Multi-target | Passed |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**This commit is release-candidate ready.**" >> "$GITHUB_STEP_SUMMARY"

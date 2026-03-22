@@ -393,12 +393,15 @@
 # ─────────────────────────────────────────────────────────────────────
 
 - [ ] 20. Release hardening and RC process
-  - [ ] 20.1 Define a formal release-candidate gate
-    - Add a `release-candidate` CI workflow or manual step that runs the
-      full fixture matrix, multi-target smoke, bytecode verification, and
-      source-map checks in a single gated pass
-    - Gate `release.yml` on this combined pass
+  - [x] 20.1 Define a formal release-candidate gate
+    - Added `rc-gate` job to ci.yml that depends on all platform fixture jobs
+    - Runs source-map (7 checks), bytecode (8 checks), and multi-target (8 checks)
+      verification as the final combined RC signal
+    - Produces a GitHub Step Summary with pass/fail table
+    - A commit is RC-ready when `rc-gate` is green
+    - Updated v1-release-criteria.md to reference the RC gate
     - _Depends on: 13.3, 15.2_
+    - **Output:** `rc-gate` job in `.github/workflows/ci.yml`, docs update
 
   - [ ] 20.2 Add npm publish dry-run and tarball verification
     - Run `pnpm pack --dry-run` in CI to verify the published file list

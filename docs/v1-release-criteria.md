@@ -96,10 +96,11 @@ These CI jobs must all be green on the release candidate commit.
 
 | Job | What it validates | Required |
 |---|---|---|
-| `fast` | Build, config tests (16), node-only fixtures (12) | Yes |
-| `fixtures-macos` | Full matrix on macOS arm64 (12 fixtures, packaged) | Yes |
-| `fixtures-linux` | Full matrix on Linux x64 (12 fixtures, packaged) | Yes |
-| `fixtures-windows` | Full matrix on Windows x64 (12 fixtures, packaged) | Yes |
+| `fast` | Build, config tests (16), node-only fixtures (13) | Yes |
+| `fixtures-macos` | Full matrix on macOS arm64 (packaged) | Yes |
+| `fixtures-linux` | Full matrix on Linux x64 (packaged) | Yes |
+| `fixtures-windows` | Full matrix on Windows x64 (packaged) | Yes |
+| **`rc-gate`** | **Source maps (7), bytecode (8), multi-target (8) — combined RC signal** | **Yes** |
 
 ### Completed manually (not automated in CI)
 
