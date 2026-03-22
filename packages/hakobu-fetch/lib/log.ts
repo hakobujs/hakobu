@@ -1,7 +1,6 @@
 /* eslint-disable no-underscore-dangle, no-console */
 
 import Progress from 'progress';
-import assert from 'assert';
 import picocolors from 'picocolors';
 import { WriteStream } from 'tty';
 
@@ -55,9 +54,13 @@ class Log {
   }
 
   enableProgress(text: string) {
-    assert(!this.bar);
+    // If a progress bar is already active (e.g., parallel downloads),
+    // finish it before starting a new one.
+    if (this.bar) {
+      this.disableProgress();
+    }
 
-    text += ' '.repeat(35 - text.length);
+    text += ' '.repeat(Math.max(0, 35 - text.length));
     this.bar = new Progress(`  ${text} [:bar] :percent`, {
       stream: process.stdout,
       width: 20,
