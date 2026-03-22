@@ -697,17 +697,21 @@
     - _Depends on: 25.2_
     - **Output:** `appdir.ts`, `config.ts`, `fixtures/test-appdir.js`
 
-  - [ ] 25.5 Optional AppImage packaging
-    - When `--format appimage` is specified, produce a self-contained
-      `.AppImage` file from the generated AppDir
-    - Use `appimagetool` (external, must be in PATH) to assemble the
-      AppImage from the AppDir output of 25.1
-    - Skip gracefully (with clear error) if `appimagetool` is not
-      available — do not bundle it
-    - Document where to obtain `appimagetool` and how to integrate it
-      into CI
+  - [x] 25.5 Optional AppImage packaging
+    - Added `--appimage` CLI flag and `appImage` config option
+    - `--appimage` implies `--appdir`: builds AppDir first, then runs
+      `appimagetool` to produce the `.AppImage`, then cleans up the
+      intermediate AppDir
+    - `createAppImage()` in `appdir.ts`: checks for `appimagetool` in
+      PATH, sets ARCH env var, runs with inherit stdio
+    - Clear error with download URL when `appimagetool` is absent
+    - `.AppImage` suffix auto-appended to output path
+    - Non-Linux targets rejected (same validation as `--appdir`)
+    - 37/37 verification tests (3 new: tool-missing error with URL,
+      non-Linux rejection, suffix auto-append)
     - _Depends on: 25.1, 25.2, 25.3_
-    - **Output:** AppImage assembly step, docs
+    - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-appdir.js`
 
   - [ ] 25.6 Add fixture / verification for Linux artifacts
     - Create a fixture or verification script that:

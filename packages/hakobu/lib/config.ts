@@ -95,6 +95,12 @@ export interface HakobuConfig {
   appDir?: boolean;
 
   /**
+   * Produce an AppImage from the AppDir output.
+   * Implies appDir. Requires external appimagetool in PATH.
+   */
+  appImage?: boolean;
+
+  /**
    * Linux desktop metadata for .desktop file generation.
    * Only used when appDir is true.
    */
@@ -331,6 +337,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       appBundle: hakobuConfig?.appBundle,
       macos: hakobuConfig?.macos,
       appDir: hakobuConfig?.appDir,
+      appImage: hakobuConfig?.appImage,
       linux: hakobuConfig?.linux,
     },
     warnings,

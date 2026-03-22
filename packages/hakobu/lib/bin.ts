@@ -41,6 +41,8 @@ Advanced:
                       Output path becomes the .app directory
   --appdir            Wrap Linux output in an AppDir (Linux only)
                       Output path becomes the .AppDir directory
+  --appimage          Build an AppImage from AppDir (Linux only)
+                      Requires external appimagetool in PATH
 
 macOS bundle metadata (used with --app-bundle):
   --bundle-id <id>      CFBundleIdentifier (e.g., com.example.my-app)
@@ -130,7 +132,7 @@ async function main() {
              'linux-icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize', 'app-bundle', 'appdir',
-              'desktop-terminal', 'no-desktop-terminal'],
+              'desktop-terminal', 'no-desktop-terminal', 'appimage'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
@@ -205,6 +207,7 @@ async function main() {
       // App bundle / AppDir
       if (argv['app-bundle']) options.appBundle = true;
       if (argv.appdir) options.appDir = true;
+      if (argv.appimage) options.appImage = true;
 
       // macOS bundle metadata — CLI flags override config
       const cliMacos: Record<string, string> = {};
@@ -261,6 +264,7 @@ async function main() {
           macos: options.macos,
           appDir: options.appDir,
           linux: options.linux,
+          appImage: options.appImage,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

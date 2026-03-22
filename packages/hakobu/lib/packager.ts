@@ -43,7 +43,7 @@ import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
 import { createAppBundle } from './app-bundle';
 import type { MacosBundleMetadata } from './app-bundle';
-import { createAppDir, isLinuxPlatform } from './appdir';
+import { createAppDir, createAppImage, isLinuxPlatform } from './appdir';
 import type { LinuxDesktopMetadata } from './appdir';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -139,6 +139,13 @@ export interface PackageOptions {
 
   /** Linux desktop metadata for .desktop file generation. */
   linux?: LinuxDesktopMetadata;
+
+  /**
+   * Produce an AppImage from the AppDir output.
+   * Implies appDir. Requires external `appimagetool` in PATH.
+   * Only valid for Linux targets.
+   */
+  appImage?: boolean;
 }
 
 export interface PackageResult {
@@ -210,6 +217,7 @@ export interface PackageMultipleOptions {
   macos?: MacosBundleMetadata;
   appDir?: boolean;
   linux?: LinuxDesktopMetadata;
+  appImage?: boolean;
 }
 
 export interface PackageMultipleResult {
@@ -507,12 +515,24 @@ async function packageAppForTarget(
 
       // AppDir wrapping (Linux only, opt-in)
       if (options.appDir && isLinuxPlatform(targetSpec.platform)) {
-        finalOutputPath = createAppDir({
+        const appDirPath = createAppDir({
           executablePath: target.output,
           outputPath: outputPath,
           appName: manifest.appId,
           linux: options.linux,
         });
+
+        if (options.appImage) {
+          // AppImage: build from AppDir, then clean up the AppDir
+          finalOutputPath = createAppImage({
+            appDirPath,
+            outputPath: outputPath,
+            arch: targetSpec.arch,
+          });
+          try { fs.rmSync(appDirPath, { recursive: true, force: true }); } catch {}
+        } else {
+          finalOutputPath = appDirPath;
+        }
       }
     }
 
@@ -560,6 +580,11 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
         'macOS .app bundles require a Mach-O executable.'
       );
     }
+  }
+
+  // ── AppImage implies AppDir ──
+  if (options.appImage) {
+    options.appDir = true;
   }
 
   // ── AppDir validation ──
@@ -814,12 +839,23 @@ async function packageAppInner(
 
       // AppDir wrapping (Linux only, opt-in)
       if (options.appDir && isLinuxPlatform(targetSpec.platform)) {
-        finalOutputPath = createAppDir({
+        const appDirPath = createAppDir({
           executablePath: target.output,
           outputPath: requestedOutput,
           appName: manifest.appId,
           linux: options.linux,
         });
+
+        if (options.appImage) {
+          finalOutputPath = createAppImage({
+            appDirPath,
+            outputPath: requestedOutput,
+            arch: targetSpec.arch,
+          });
+          try { fs.rmSync(appDirPath, { recursive: true, force: true }); } catch {}
+        } else {
+          finalOutputPath = appDirPath;
+        }
       }
     }
 

@@ -345,6 +345,94 @@ export function createAppDir(opts: AppDirOptions): string {
   return appDirPath;
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// AppImage generation
+// ─────────────────────────────────────────────────────────────────────
+
+export interface AppImageOptions {
+  /** Path to the generated AppDir. */
+  appDirPath: string;
+
+  /**
+   * Output path for the .AppImage file.
+   * If it doesn't end with '.AppImage', '.AppImage' is appended.
+   */
+  outputPath: string;
+
+  /**
+   * Architecture string for appimagetool (e.g., 'x86_64', 'aarch64').
+   * Default: derived from process.arch.
+   */
+  arch?: string;
+}
+
+/**
+ * Map Node.js arch names to AppImage arch names.
+ */
+function nodeArchToAppImage(arch: string): string {
+  switch (arch) {
+    case 'x64': return 'x86_64';
+    case 'arm64': return 'aarch64';
+    case 'arm': return 'armhf';
+    default: return arch;
+  }
+}
+
+/**
+ * Build an AppImage from an AppDir using appimagetool.
+ *
+ * appimagetool is an external tool that must be in PATH.
+ * Download from: https://github.com/AppImage/appimagetool/releases
+ *
+ * @throws If appimagetool is not found or fails.
+ * @returns The absolute path to the generated .AppImage file.
+ */
+export function createAppImage(opts: AppImageOptions): string {
+  const { appDirPath } = opts;
+
+  let outputPath = opts.outputPath;
+  if (!outputPath.endsWith('.AppImage')) {
+    outputPath += '.AppImage';
+  }
+  outputPath = path.resolve(outputPath);
+
+  // Ensure output directory exists
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+
+  const arch = opts.arch || nodeArchToAppImage(process.arch);
+
+  // Check if appimagetool is available
+  const { execFileSync } = require('child_process');
+  try {
+    execFileSync('appimagetool', ['--version'], {
+      stdio: 'pipe',
+      timeout: 10000,
+    });
+  } catch (err: any) {
+    if (err.code === 'ENOENT') {
+      throw new Error(
+        'appimagetool is not installed or not in PATH.\n' +
+        'Download from: https://github.com/AppImage/appimagetool/releases\n' +
+        'On Ubuntu/Debian: download the AppImage, chmod +x, and move to /usr/local/bin/\n' +
+        'Or install via package manager if available.'
+      );
+    }
+    throw err;
+  }
+
+  log.info(`Building AppImage from ${path.basename(appDirPath)}...`);
+
+  execFileSync('appimagetool', [appDirPath, outputPath], {
+    stdio: 'inherit',
+    timeout: 300000,
+    env: { ...process.env, ARCH: arch },
+  });
+
+  log.info(`Created AppImage: ${outputPath}`);
+
+  return outputPath;
+}
+
 /**
  * Check if a platform string represents a Linux target.
  */
