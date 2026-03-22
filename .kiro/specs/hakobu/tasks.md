@@ -368,13 +368,14 @@
     - _Depends on: 10.3, 19.1_
     - **Output:** `packages/hakobu/lib/config.ts`, `packages/hakobu/lib/packager.ts`, `packages/hakobu/lib/bin.ts`
 
-  - [ ] 19.3 Implement bytecode generation in the package pipeline
-    - Re-enable or modernize the bytecode fabrication path for supported
-      targets when `bytecode: true` is set
-    - Keep ESM/CJS runtime semantics correct and make failure modes explicit
-      for unsupported modules or targets
+  - [x] 19.3 Implement bytecode generation in the package pipeline
+    - CJS scripts get STORE_BLOB (V8 bytecode) via the inherited fabricator
+    - ESM scripts remain source-only (vm.Script is CJS-only)
+    - --bytecode + --bundle rejected explicitly (bundle produces ESM)
+    - Source-only default path unchanged (bytecode: false)
+    - Verified: CJS app packages and runs with bytecode, 25/25 fixtures green
     - _Depends on: 19.2_
-    - **Likely output:** updates to `packages/hakobu/lib/fabricator.ts`, `packages/hakobu/lib/packager.ts`
+    - **Output:** `packages/hakobu/lib/packager.ts` (manifestToRecords bytecode, packer bytecode flag)
 
   - [ ] 19.4 Verify bytecode mode against source maps and real fixtures
     - Add fixtures that prove bytecode mode still runs packaged apps

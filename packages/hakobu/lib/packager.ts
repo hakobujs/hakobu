@@ -21,6 +21,7 @@ import type { BundleOutput } from './bundler';
 import type { PackagingManifest } from './manifest';
 import { log } from './log';
 import {
+  STORE_BLOB,
   STORE_CONTENT,
   STORE_STAT,
   STORE_LINKS,
@@ -285,9 +286,9 @@ async function packageAppForTarget(
   }
 
   // Build payload
-  const { records, entrypoint, symLinks } = manifestToRecords(manifest);
+  const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
   const slash = targetSpec.platform === 'win' ? '\\' : '/';
-  const backpack = packer({ records, entrypoint, bytecode: false, symLinks });
+  const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
 
   fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
@@ -351,12 +352,12 @@ function defaultOutputName(appId: string, target: { platform: string; arch: stri
 // ─────────────────────────────────────────────────────────────────────
 
 export async function packageApp(options: PackageOptions): Promise<PackageResult> {
-  // ── Bytecode mode gate ──
-  if (options.bytecode) {
+  // ── Bytecode mode validation ──
+  if (options.bytecode && options.bundle) {
     throw new Error(
-      'Bytecode compilation (--bytecode) is not yet implemented.\n' +
-      'Hakobu currently packages source-only. Bytecode support is planned for a future release.\n' +
-      'Remove --bytecode or set hakobu.bytecode to false to package in source-only mode.'
+      'Bytecode mode (--bytecode) cannot be combined with bundle mode (--bundle).\n' +
+      'Bundle mode produces ESM output which is not compatible with V8 bytecode compilation.\n' +
+      'Use one or the other, not both.'
     );
   }
 
@@ -489,14 +490,14 @@ async function packageAppInner(
   // ── 4. Bridge: manifest → inherited FileRecords + Stripe format ──
   log.info('Building payload...');
 
-  const { records, entrypoint, symLinks } = manifestToRecords(manifest);
+  const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
 
   // ── 5. Pack using inherited packer ──
   const slash = targetSpec.platform === 'win' ? '\\' : '/';
   const backpack = packer({
     records,
     entrypoint,
-    bytecode: false,
+    bytecode: !!options.bytecode,
     symLinks,
   });
 
@@ -564,7 +565,7 @@ async function packageAppInner(
 // Bridge: manifest → inherited FileRecords
 // ─────────────────────────────────────────────────────────────────────
 
-function manifestToRecords(manifest: PackagingManifest): {
+function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
   records: FileRecords;
   entrypoint: string;
   symLinks: SymLinks;
@@ -578,7 +579,7 @@ function manifestToRecords(manifest: PackagingManifest): {
     const absPath = file.absolutePath;
     const content = fs.readFileSync(absPath);
 
-    records[absPath] = {
+    const record: any = {
       file: absPath,
       body: content,
       [STORE_CONTENT]: content,
@@ -590,6 +591,15 @@ function manifestToRecords(manifest: PackagingManifest): {
         isSymbolicLinkValue: false,
       },
     };
+
+    // Bytecode mode: add STORE_BLOB for CJS scripts.
+    // The fabricator will compile the source to V8 cached data.
+    // ESM scripts are NOT bytecode-compiled (vm.Script is CJS-only).
+    if (bytecode && file.kind === 'script' && file.format === 'cjs') {
+      record[STORE_BLOB] = content;
+    }
+
+    records[absPath] = record;
 
     const dir = path.dirname(absPath);
     if (!dirContents.has(dir)) dirContents.set(dir, []);
