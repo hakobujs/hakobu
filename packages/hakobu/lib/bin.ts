@@ -51,6 +51,15 @@ Signing:
                         Also: HAKOBU_WIN_CERT_PASSWORD env var
                         See docs/windows-signing.md
 
+Windows metadata (PE VERSIONINFO):
+  --product-name <n>    Product name in file properties
+  --file-description <d> Description shown in Task Manager
+  --company-name <n>    Company / publisher name
+  --file-version <v>    File version (e.g., 1.2.3)
+  --product-version <v> Product version (defaults to file version)
+  --icon <path>         .ico file to embed as application icon
+                        See docs/exe-metadata.md
+
   Without --bundle, Hakobu packages JS files directly (native mode).
   With --bundle, Rolldown compiles TS and resolves dependencies first.
   See docs/bundle-mode.md for semantic differences and caveats.
@@ -91,7 +100,9 @@ async function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['target', 'targets', 'output', 'entry', 'external', 'config',
              'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
-             'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password'],
+             'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password',
+             'product-name', 'file-description', 'company-name', 'file-version',
+             'product-version', 'icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
@@ -165,6 +176,18 @@ async function main() {
       if (argv['win-cert']) options.winCertPath = argv['win-cert'];
       if (argv['win-cert-password']) options.winCertPassword = argv['win-cert-password'];
 
+      // PE metadata — CLI flags override config
+      const cliMeta: Record<string, string> = {};
+      if (argv['product-name']) cliMeta.productName = argv['product-name'];
+      if (argv['file-description']) cliMeta.fileDescription = argv['file-description'];
+      if (argv['company-name']) cliMeta.companyName = argv['company-name'];
+      if (argv['file-version']) cliMeta.fileVersion = argv['file-version'];
+      if (argv['product-version']) cliMeta.productVersion = argv['product-version'];
+      if (argv.icon) cliMeta.icon = argv.icon;
+      if (Object.keys(cliMeta).length > 0) {
+        options.metadata = { ...options.metadata, ...cliMeta };
+      }
+
       if (isMulti) {
         const results = await packageMultiple({
           projectRoot: options.projectRoot,
@@ -179,6 +202,7 @@ async function main() {
           notarize: options.notarize,
           winCertPath: options.winCertPath,
           winCertPassword: options.winCertPassword,
+          metadata: options.metadata,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

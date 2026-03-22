@@ -52,6 +52,21 @@ export interface HakobuConfig {
    * Source maps are not available in bytecode mode.
    */
   bytecode?: boolean;
+
+  /**
+   * Executable metadata for Windows PE resources.
+   * Sets VERSIONINFO fields (product name, version, description, etc.)
+   * and optionally an application icon.
+   */
+  metadata?: {
+    productName?: string;
+    fileDescription?: string;
+    companyName?: string;
+    legalCopyright?: string;
+    fileVersion?: string;
+    productVersion?: string;
+    icon?: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -248,6 +263,9 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
   // Bytecode mode — CLI --bytecode overrides config only when explicitly true
   const bytecode = args.bytecode === true ? true : (source.bytecode ?? false);
 
+  // Metadata — from "hakobu.metadata" in package.json
+  const metadata = hakobuConfig?.metadata;
+
   return {
     options: {
       projectRoot,
@@ -259,6 +277,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       bundle,
       bundleExternal,
       bytecode: bytecode || undefined,
+      metadata,
     },
     warnings,
   };

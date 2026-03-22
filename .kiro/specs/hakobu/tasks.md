@@ -484,7 +484,7 @@
     - _Depends on: 19.4_
     - **Output:** circular bytecode tests in `fixtures/test-bytecode.js`
 
-- [ ] 23. Artifact signing and distribution ergonomics
+- [x] 23. Artifact signing and distribution ergonomics
   - [x] 23.1 Add macOS notarization support
     - Updated `signMachOExecutable()` to accept a signing identity
       (ad-hoc remains the default when no identity is configured)
@@ -519,8 +519,20 @@
     - _Depends on: 10.1_
     - **Output:** `windows-sign.ts`, `packager.ts`, `bin.ts`, `docs/windows-signing.md`
 
-  - [ ] 23.3 Add output metadata injection
-    - Inject version/icon/description metadata into Windows PE executables
-      and macOS Mach-O binaries where the format supports it
-    - Read metadata from package.json or a dedicated config section
+  - [x] 23.3 Add output metadata injection
+    - Created `packages/hakobu/lib/pe-metadata.ts` with `injectPeMetadata()`
+      using resedit (pure-JS PE resource editor, works cross-platform)
+    - Supported Windows PE fields: ProductName, FileDescription,
+      CompanyName, LegalCopyright, FileVersion, ProductVersion, icon (.ico)
+    - Config via `"hakobu": { "metadata": { ... } }` in package.json
+    - CLI flags: `--product-name`, `--file-description`, `--company-name`,
+      `--file-version`, `--product-version`, `--icon` (override config)
+    - Injection runs after packaging, before signing (correct ordering)
+    - macOS/Linux: not supported — Mach-O and ELF have no embedded
+      metadata format (macOS uses .app bundles, Linux uses .desktop files)
+    - Added resedit as dependency
+    - Full docs at `docs/exe-metadata.md` covering supported fields,
+      platform limitations, programmatic API, and troubleshooting
     - _Depends on: 10.1_
+    - **Output:** `pe-metadata.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `docs/exe-metadata.md`

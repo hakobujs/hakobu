@@ -36,6 +36,8 @@ import { CompressType } from './compress_type';
 import { plusx } from './chmod';
 import { patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable } from './mach-o';
 import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-sign';
+import { injectPeMetadata } from './pe-metadata';
+import type { ExeMetadata } from './pe-metadata';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -103,6 +105,13 @@ export interface PackageOptions {
    * Also read from HAKOBU_WIN_CERT_PASSWORD env var.
    */
   winCertPassword?: string;
+
+  /**
+   * Executable metadata to inject into Windows PE executables.
+   * Includes product name, version, description, company, icon.
+   * See docs/exe-metadata.md for details.
+   */
+  metadata?: ExeMetadata;
 }
 
 export interface PackageResult {
@@ -169,6 +178,7 @@ export interface PackageMultipleOptions {
   notarize?: boolean;
   winCertPath?: string;
   winCertPassword?: string;
+  metadata?: ExeMetadata;
 }
 
 export interface PackageMultipleResult {
@@ -423,6 +433,10 @@ async function packageAppForTarget(
       }
       await plusx(target.output);
     } else if (targetSpec.platform === 'win') {
+      // Metadata injection must happen BEFORE signing
+      if (options.metadata) {
+        await injectPeMetadata(target.output, options.metadata);
+      }
       if (hasWindowsSigningCredentials(options.winCertPath)) {
         signWindowsExecutable({
           executable: target.output,
@@ -662,6 +676,10 @@ async function packageAppInner(
       }
       await plusx(target.output);
     } else if (targetSpec.platform === 'win') {
+      // Metadata injection must happen BEFORE signing
+      if (options.metadata) {
+        await injectPeMetadata(target.output, options.metadata);
+      }
       if (hasWindowsSigningCredentials(options.winCertPath)) {
         signWindowsExecutable({
           executable: target.output,
