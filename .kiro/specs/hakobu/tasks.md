@@ -536,3 +536,116 @@
     - _Depends on: 10.1_
     - **Output:** `pe-metadata.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `docs/exe-metadata.md`
+
+- [ ] 24. macOS application bundle output
+  - [ ] 24.1 Generate `.app` bundle structure from packaged executable
+    - Add an `--app-bundle` (or `--format app`) output mode for macOS targets
+    - Generate the standard `.app/Contents/MacOS/<binary>` directory layout
+    - Copy the packaged Mach-O executable into the bundle
+    - Raw executable output remains the default; `.app` is opt-in
+    - _Depends on: 10.1, 23.1_
+
+  - [ ] 24.2 Generate `Info.plist` with app metadata
+    - Produce a well-formed `Info.plist` from config / CLI metadata fields:
+      CFBundleName, CFBundleDisplayName, CFBundleIdentifier,
+      CFBundleVersion, CFBundleShortVersionString, NSHumanReadableCopyright
+    - Read from `"hakobu": { "macos": { ... } }` in package.json
+    - Sensible defaults: derive bundle ID from package name (e.g.,
+      `com.example.my-app`), version from package.json version
+    - CLI overrides: `--bundle-id`, `--bundle-name` (reuse existing
+      `--product-name`, `--file-version` where they map cleanly)
+    - _Depends on: 24.1_
+    - **Output:** `Info.plist` generator, config/CLI plumbing, docs
+
+  - [ ] 24.3 Support `.icns` application icon in bundles
+    - Accept a `.icns` file path via config (`metadata.macosIcon`) or
+      CLI (`--macos-icon`)
+    - Place it at `.app/Contents/Resources/<name>.icns` and reference
+      it as `CFBundleIconFile` in `Info.plist`
+    - Do not convert PNG→ICNS automatically (document the requirement
+      and point to `iconutil` / `sips` / ImageMagick)
+    - _Depends on: 24.2_
+    - **Output:** icon placement in bundle, `Info.plist` icon reference
+
+  - [ ] 24.4 Integrate signing and notarization with `.app` bundles
+    - When `--sign-identity` is set and output is a `.app` bundle,
+      sign the entire bundle (not just the inner binary) with
+      `codesign --deep --sign <identity> --options runtime --timestamp`
+    - When `--notarize` is set, zip the `.app` bundle and submit it
+      (notarytool accepts `.app` inside a zip)
+    - Staple the ticket to the `.app` bundle
+    - Document differences from raw-executable signing
+    - _Depends on: 23.1, 24.1_
+    - **Output:** updated signing/notarization flow for bundles,
+      docs update in `docs/macos-notarization.md`
+
+  - [ ] 24.5 Add fixture / verification for `.app` output
+    - Create a fixture that packages a simple project as `.app`,
+      verifies bundle structure, `Info.plist` content, and that the
+      executable inside runs correctly
+    - _Depends on: 24.2_
+    - **Output:** `.app` bundle fixture or verification script
+
+- [ ] 25. Linux desktop and distribution artifacts
+  - [ ] 25.1 Generate AppDir-style directory output
+    - Add an `--appdir` (or `--format appdir`) output mode for Linux targets
+    - Generate the standard AppDir layout:
+      `<AppDir>/usr/bin/<binary>`, `<AppDir>/usr/share/applications/<name>.desktop`,
+      `<AppDir>/usr/share/icons/hicolor/<size>/apps/<name>.png`,
+      `<AppDir>/AppRun` (launcher script)
+    - Raw executable output remains the default; AppDir is opt-in
+    - _Depends on: 10.1_
+
+  - [ ] 25.2 Generate `.desktop` file from metadata
+    - Produce a valid `.desktop` entry from config / CLI metadata:
+      Name, Comment, Exec, Icon, Categories, Terminal
+    - Read from `"hakobu": { "linux": { ... } }` in package.json
+    - Sensible defaults: Name from package name, Exec pointing to the
+      binary, Terminal=true for CLI apps
+    - CLI overrides: `--desktop-name`, `--desktop-categories`,
+      `--desktop-terminal` (reuse `--product-name`, `--file-description`
+      where they map cleanly)
+    - Validate against the Desktop Entry Specification
+    - _Depends on: 25.1_
+    - **Output:** `.desktop` generator, config/CLI plumbing, docs
+
+  - [ ] 25.3 Support PNG icon placement for Linux
+    - Accept icon path(s) via config (`metadata.linuxIcon`) or CLI
+      (`--linux-icon`)
+    - Place icons in the hicolor icon theme directory structure:
+      `<AppDir>/usr/share/icons/hicolor/{16x16,32x32,48x48,128x128,256x256}/apps/<name>.png`
+    - Accept either a single PNG (placed at all sizes) or a directory
+      of pre-sized PNGs
+    - Also place a copy at `<AppDir>/<name>.png` (AppImage convention)
+    - _Depends on: 25.1_
+    - **Output:** icon placement logic, config/CLI plumbing
+
+  - [ ] 25.4 Add AppStream metainfo support
+    - Generate a minimal `<name>.metainfo.xml` / `<name>.appdata.xml`
+      from package.json metadata (name, summary, description, license,
+      homepage, version)
+    - Place at `<AppDir>/usr/share/metainfo/<name>.metainfo.xml`
+    - Validate against `appstreamcli validate` if available
+    - _Depends on: 25.2_
+    - **Output:** AppStream metainfo generator, docs
+
+  - [ ] 25.5 Optional AppImage packaging
+    - When `--format appimage` is specified, produce a self-contained
+      `.AppImage` file from the generated AppDir
+    - Use `appimagetool` (external, must be in PATH) to assemble the
+      AppImage from the AppDir output of 25.1
+    - Skip gracefully (with clear error) if `appimagetool` is not
+      available — do not bundle it
+    - Document where to obtain `appimagetool` and how to integrate it
+      into CI
+    - _Depends on: 25.1, 25.2, 25.3_
+    - **Output:** AppImage assembly step, docs
+
+  - [ ] 25.6 Add fixture / verification for Linux artifacts
+    - Create a fixture or verification script that:
+      validates AppDir structure, `.desktop` file syntax, icon placement,
+      and that the executable inside runs correctly
+    - If AppImage is built, verify it is executable and produces correct
+      output
+    - _Depends on: 25.2_
+    - **Output:** Linux artifact fixture or verification script
