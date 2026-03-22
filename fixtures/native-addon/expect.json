@@ -1,0 +1,12 @@
+{
+  "format": "native-addon",
+  "addon_loaded": true,
+  "add_exists": true,
+  "multiply_exists": true,
+  "version_exists": true,
+  "add_result": 42,
+  "multiply_result": 42,
+  "add_float": 4,
+  "version_value": "1.0.0",
+  "resolve_node": true
+}

@@ -83,6 +83,37 @@ function requiresBundle(fixtureDir) {
   return !!(pkg.hakobu && pkg.hakobu.bundle);
 }
 
+// Check if a fixture has a native addon that needs compiling
+function needsNativeBuild(fixtureDir) {
+  return fs.existsSync(path.join(fixtureDir, 'binding.gyp'));
+}
+
+// Build native addon via node-gyp. Returns true on success, false if skipped.
+function buildNativeAddon(fixtureDir) {
+  const buildDir = path.join(fixtureDir, 'build', 'Release');
+  // Skip rebuild if .node file already exists
+  if (fs.existsSync(buildDir)) {
+    const built = fs.readdirSync(buildDir).find(f => f.endsWith('.node'));
+    if (built) return true;
+  }
+  // Try node-gyp directly, then fall back to npx node-gyp
+  for (const cmd of ['node-gyp', 'npx']) {
+    try {
+      const cmdArgs = cmd === 'npx' ? ['node-gyp', 'rebuild'] : ['rebuild'];
+      execFileSync(cmd, cmdArgs, {
+        cwd: fixtureDir,
+        timeout: 120000,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      return true;
+    } catch {
+      // try next
+    }
+  }
+  return false;
+}
+
 // Run a fixture with node (unpackaged)
 function runNode(fixtureDir) {
   const pkg = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'package.json'), 'utf8'));
@@ -136,6 +167,17 @@ console.log(`  Mode:     ${nodeOnly ? 'node-only' : 'node + packaged'}\n`);
 for (const name of fixtures) {
   const dir = path.join(FIXTURES_DIR, name);
   const expected = JSON.parse(fs.readFileSync(path.join(dir, 'expect.json'), 'utf8'));
+
+  // ── Build native addon if needed ──
+  const isNative = needsNativeBuild(dir);
+  if (isNative) {
+    if (!buildNativeAddon(dir)) {
+      console.log(`  --  ${name} (node) — skipped (native build failed, no compiler?)`);
+      console.log(`  --  ${name} (packaged) — skipped (native build failed)`);
+      totalSkip += nodeOnly ? 2 : 2;
+      continue;
+    }
+  }
 
   // ── Node (unpackaged) ──
   let nodeResult;

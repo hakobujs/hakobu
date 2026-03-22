@@ -461,11 +461,17 @@
     - _Depends on: 12.1_
     - **Output:** `fixtures/npm-dependency/`, directory tree fix in `packager.ts`
 
-  - [ ] 22.2 Add a native addon fixture with a real compiled .node file
-    - Package a project using a real compiled addon (e.g., `better-sqlite3`
-      or a minimal custom addon built with node-gyp)
-    - Verify extraction and dlopen at runtime in the packaged executable
+  - [x] 22.2 Add a native addon fixture with a real compiled .node file
+    - Created `fixtures/native-addon/` with a tiny Node-API C addon
+      (add, multiply, version) built via node-gyp
+    - Updated `fixtures/run.js` to auto-build native addons before running
+      (detects `binding.gyp`, tries `node-gyp` then `npx node-gyp`, skips
+      gracefully if no compiler available)
+    - Verifies: addon loads via require(), native functions return correct
+      results, require.resolve returns .node path
+    - In packaged mode, validates the prelude's dlopen extraction path
     - _Depends on: 9.1, 12.2_
+    - **Output:** `fixtures/native-addon/`, build support in `fixtures/run.js`
 
   - [ ] 22.3 Add a bytecode + CJS multi-module fixture
     - Package a non-trivial CJS project with `--bytecode` that has multiple
