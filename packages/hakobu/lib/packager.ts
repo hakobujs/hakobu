@@ -34,7 +34,7 @@ import packer from './packer';
 import producer from './producer';
 import { CompressType } from './compress_type';
 import { plusx } from './chmod';
-import { patchMachOExecutable, signMachOExecutable } from './mach-o';
+import { patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable } from './mach-o';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -75,6 +75,21 @@ export interface PackageOptions {
    * Opt-in. Default: false (source-only mode).
    */
   bytecode?: boolean;
+
+  /**
+   * macOS code-signing identity.
+   * Default: '-' (ad-hoc).
+   * For distribution: 'Developer ID Application: Your Name (TEAMID)'.
+   * Also read from HAKOBU_SIGN_IDENTITY env var.
+   */
+  signIdentity?: string;
+
+  /**
+   * Submit the signed macOS executable for Apple notarization.
+   * Requires signIdentity (not ad-hoc), plus Apple credentials
+   * via env vars or options.
+   */
+  notarize?: boolean;
 }
 
 export interface PackageResult {
@@ -137,6 +152,8 @@ export interface PackageMultipleOptions {
   externals?: string[];
   bundle?: boolean | string;
   bundleExternal?: string[];
+  signIdentity?: string;
+  notarize?: boolean;
 }
 
 export interface PackageMultipleResult {
@@ -385,7 +402,11 @@ async function packageAppForTarget(
       if (targetSpec.platform === 'macos') {
         const buf = patchMachOExecutable(fs.readFileSync(target.output));
         fs.writeFileSync(target.output, buf);
-        try { signMachOExecutable(target.output); } catch {}
+        try { signMachOExecutable(target.output, options.signIdentity); } catch {}
+
+        if (options.notarize) {
+          await notarizeMachOExecutable({ executable: target.output });
+        }
       }
       await plusx(target.output);
     }
@@ -607,11 +628,15 @@ async function packageAppInner(
         const buf = patchMachOExecutable(fs.readFileSync(target.output));
         fs.writeFileSync(target.output, buf);
         try {
-          signMachOExecutable(target.output);
+          signMachOExecutable(target.output, options.signIdentity);
         } catch {
           if (targetSpec.arch === 'arm64') {
             log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
           }
+        }
+
+        if (options.notarize) {
+          await notarizeMachOExecutable({ executable: target.output });
         }
       }
       await plusx(target.output);

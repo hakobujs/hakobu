@@ -1,4 +1,9 @@
-import { execFileSync } from 'child_process';
+import { execFileSync, execFile } from 'child_process';
+import { promisify } from 'util';
+
+import { log } from './log';
+
+const execFileAsync = promisify(execFile);
 
 function parseCStr(buf: Buffer) {
   for (let i = 0; i < buf.length; i += 1) {
@@ -62,14 +67,42 @@ function patchMachOExecutable(file: Buffer) {
   return file;
 }
 
-function signMachOExecutable(executable: string) {
-  try {
-    execFileSync('codesign', ['-f', '--sign', '-', executable], {
-      stdio: 'inherit',
-    });
-  } catch {
-    execFileSync('ldid', ['-Cadhoc', '-S', executable], { stdio: 'inherit' });
+/**
+ * Sign a Mach-O executable.
+ *
+ * @param executable - Path to the executable
+ * @param identity - Signing identity. Default: '-' (ad-hoc).
+ *   For distribution, use a Developer ID identity:
+ *   'Developer ID Application: Your Name (TEAMID)'
+ *
+ * Identity resolution order:
+ *   1. Explicit `identity` argument
+ *   2. HAKOBU_SIGN_IDENTITY env var
+ *   3. Ad-hoc signing ('-')
+ */
+function signMachOExecutable(executable: string, identity?: string) {
+  const id = identity || process.env.HAKOBU_SIGN_IDENTITY || '-';
+  const args = [
+    '--force',
+    '--sign', id,
+    '--options', 'runtime',          // hardened runtime — required for notarization
+    '--timestamp',                    // secure timestamp — required for notarization
+    executable,
+  ];
+
+  // Ad-hoc signing doesn't support --timestamp and doesn't need --options runtime
+  if (id === '-') {
+    try {
+      execFileSync('codesign', ['-f', '--sign', '-', executable], {
+        stdio: 'inherit',
+      });
+    } catch {
+      execFileSync('ldid', ['-Cadhoc', '-S', executable], { stdio: 'inherit' });
+    }
+    return;
   }
+
+  execFileSync('codesign', args, { stdio: 'inherit' });
 }
 
 function removeMachOExecutableSignature(executable: string) {
@@ -78,8 +111,119 @@ function removeMachOExecutableSignature(executable: string) {
   });
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Notarization
+// ─────────────────────────────────────────────────────────────────────
+
+export interface NotarizeOptions {
+  /** Path to the signed executable. */
+  executable: string;
+
+  /**
+   * Apple ID email for notarization.
+   * Resolved from argument → HAKOBU_APPLE_ID env var.
+   */
+  appleId?: string;
+
+  /**
+   * App-specific password for the Apple ID.
+   * Resolved from argument → HAKOBU_APPLE_PASSWORD env var.
+   *
+   * Generate at https://appleid.apple.com/account/manage → App-Specific Passwords.
+   */
+  applePassword?: string;
+
+  /**
+   * Apple Developer Team ID.
+   * Resolved from argument → HAKOBU_APPLE_TEAM_ID env var.
+   */
+  teamId?: string;
+}
+
+/**
+ * Submit a signed macOS executable for Apple notarization, then staple
+ * the notarization ticket to the binary.
+ *
+ * Prerequisites:
+ *   - The executable must be signed with a Developer ID identity (not ad-hoc)
+ *     with hardened runtime (--options runtime) and a secure timestamp (--timestamp)
+ *   - Apple ID, app-specific password, and team ID must be provided
+ *   - Xcode command-line tools must be installed (provides xcrun)
+ *
+ * The function:
+ *   1. Zips the executable (notarytool requires a zip, dmg, or pkg)
+ *   2. Submits to Apple via `xcrun notarytool submit --wait`
+ *   3. Staples the ticket via `xcrun stapler staple`
+ *   4. Cleans up the temp zip
+ *
+ * @throws If any step fails (missing credentials, submission rejected, etc.)
+ */
+async function notarizeMachOExecutable(opts: NotarizeOptions): Promise<void> {
+  const {
+    executable,
+    appleId = process.env.HAKOBU_APPLE_ID,
+    applePassword = process.env.HAKOBU_APPLE_PASSWORD,
+    teamId = process.env.HAKOBU_APPLE_TEAM_ID,
+  } = opts;
+
+  if (!appleId || !applePassword || !teamId) {
+    const missing = [];
+    if (!appleId) missing.push('HAKOBU_APPLE_ID');
+    if (!applePassword) missing.push('HAKOBU_APPLE_PASSWORD');
+    if (!teamId) missing.push('HAKOBU_APPLE_TEAM_ID');
+    throw new Error(
+      `Cannot notarize: missing ${missing.join(', ')}. ` +
+      `Set these env vars or pass them as options. See docs/macos-notarization.md.`
+    );
+  }
+
+  // 1. Create a zip for submission (notarytool requires zip/dmg/pkg)
+  const zipPath = executable + '.zip';
+  log.info('Creating zip for notarization submission...');
+  execFileSync('ditto', ['-c', '-k', '--keepParent', executable, zipPath], {
+    stdio: 'pipe',
+  });
+
+  try {
+    // 2. Submit and wait for notarization result
+    log.info('Submitting to Apple notary service (this may take a few minutes)...');
+    const { stdout } = await execFileAsync('xcrun', [
+      'notarytool', 'submit', zipPath,
+      '--apple-id', appleId,
+      '--password', applePassword,
+      '--team-id', teamId,
+      '--wait',
+    ], { timeout: 600000 }); // 10 minute timeout
+
+    log.info(`Notarization result:\n${stdout}`);
+
+    if (stdout.includes('status: Invalid') || stdout.includes('status: Rejected')) {
+      throw new Error(
+        'Apple notarization was rejected. Run:\n' +
+        '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
+        'to see the full rejection reason.'
+      );
+    }
+
+    // 3. Staple the notarization ticket to the executable
+    log.info('Stapling notarization ticket...');
+    execFileSync('xcrun', ['stapler', 'staple', executable], {
+      stdio: 'inherit',
+    });
+
+    log.info('Notarization complete — executable is notarized and stapled.');
+  } finally {
+    // 4. Clean up temp zip
+    try {
+      const fs = require('fs');
+      fs.unlinkSync(zipPath);
+    } catch {}
+  }
+}
+
 export {
   patchMachOExecutable,
   removeMachOExecutableSignature,
   signMachOExecutable,
+  notarizeMachOExecutable,
 };

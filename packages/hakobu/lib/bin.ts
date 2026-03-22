@@ -36,7 +36,15 @@ Bundle mode (optional — for TypeScript / monorepo projects):
   --external <mod>    Keep module external when bundling (repeatable)
 
 Advanced:
-  --bytecode          Compile JS to V8 bytecode before packaging (not yet implemented)
+  --bytecode          Compile JS to V8 bytecode before packaging
+
+macOS signing:
+  --sign-identity <id>  Code-signing identity (default: ad-hoc)
+                        Also: HAKOBU_SIGN_IDENTITY env var
+  --notarize            Submit to Apple notarization after signing
+                        Requires: HAKOBU_APPLE_ID, HAKOBU_APPLE_PASSWORD,
+                        HAKOBU_APPLE_TEAM_ID env vars
+                        See docs/macos-notarization.md
 
   Without --bundle, Hakobu packages JS files directly (native mode).
   With --bundle, Rolldown compiles TS and resolves dependencies first.
@@ -78,9 +86,9 @@ async function main() {
   const argv = minimist(process.argv.slice(2), {
     string: ['target', 'targets', 'output', 'entry', 'external', 'config',
              'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
-             'options', 'no-dict'],
+             'options', 'no-dict', 'sign-identity'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
-              'no-native-build'],
+              'no-native-build', 'notarize'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
@@ -146,6 +154,10 @@ async function main() {
       const targetStr = options.target || '';
       const isMulti = targetStr.includes(',') || targetStr === 'all';
 
+      // macOS signing options
+      if (argv['sign-identity']) options.signIdentity = argv['sign-identity'];
+      if (argv.notarize) options.notarize = true;
+
       if (isMulti) {
         const results = await packageMultiple({
           projectRoot: options.projectRoot,
@@ -156,6 +168,8 @@ async function main() {
           externals: options.externals,
           bundle: options.bundle,
           bundleExternal: options.bundleExternal,
+          signIdentity: options.signIdentity,
+          notarize: options.notarize,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

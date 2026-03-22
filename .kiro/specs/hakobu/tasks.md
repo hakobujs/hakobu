@@ -485,11 +485,23 @@
     - **Output:** circular bytecode tests in `fixtures/test-bytecode.js`
 
 - [ ] 23. Artifact signing and distribution ergonomics
-  - [ ] 23.1 Add macOS notarization support
-    - After codesigning the output executable, submit it for Apple notarization
-      when a signing identity and Apple credentials are provided
-    - Keep ad-hoc signing as the default when no identity is configured
+  - [x] 23.1 Add macOS notarization support
+    - Updated `signMachOExecutable()` to accept a signing identity
+      (ad-hoc remains the default when no identity is configured)
+    - Developer ID signing uses hardened runtime + secure timestamp
+      (both required for Apple notarization)
+    - Added `notarizeMachOExecutable()`: zip → notarytool submit --wait →
+      stapler staple → cleanup
+    - Added `--sign-identity` and `--notarize` CLI flags
+    - Added `HAKOBU_SIGN_IDENTITY`, `HAKOBU_APPLE_ID`,
+      `HAKOBU_APPLE_PASSWORD`, `HAKOBU_APPLE_TEAM_ID` env vars
+    - Options flow through both `packageApp` and `packageMultiple`
+    - Clear error messages when notarization credentials are missing
+    - Non-macOS targets silently ignore `--notarize`
+    - Full docs at `docs/macos-notarization.md` covering prerequisites,
+      CI setup, troubleshooting, and verification
     - _Depends on: 10.1_
+    - **Output:** `mach-o.ts`, `packager.ts`, `bin.ts`, `docs/macos-notarization.md`
 
   - [ ] 23.2 Add Windows Authenticode signing support
     - Sign the output .exe with an Authenticode certificate when provided
