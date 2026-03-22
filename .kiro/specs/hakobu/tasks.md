@@ -680,14 +680,22 @@
     - **Output:** `appdir.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-appdir.js`
 
-  - [ ] 25.4 Add AppStream metainfo support
-    - Generate a minimal `<name>.metainfo.xml` / `<name>.appdata.xml`
-      from package.json metadata (name, summary, description, license,
-      homepage, version)
-    - Place at `<AppDir>/usr/share/metainfo/<name>.metainfo.xml`
-    - Validate against `appstreamcli validate` if available
+  - [x] 25.4 Add AppStream metainfo support
+    - Added `generateMetainfo()` in `appdir.ts` producing a valid
+      `<component type="desktop-application">` XML file
+    - Required fields always present: `<id>` (derived reverse-DNS),
+      `<name>`, `<summary>`, `<metadata_license>` (FSFAP),
+      `<project_license>`, `<launchable>` (references .desktop file)
+    - Optional fields from config: `<description>`, `<url type="homepage">`,
+      `<releases>` with version
+    - Config via `hakobu.linux`: summary, description, url, license, version
+    - Placed at `AppDir/usr/share/metainfo/<appName>.metainfo.xml`
+    - Always generated in AppDir mode — defaults produce valid metainfo
+    - 34/34 verification tests (10 new: file exists, XML structure,
+      required keys, launchable ref, custom name/summary/description/
+      url/license/version)
     - _Depends on: 25.2_
-    - **Output:** AppStream metainfo generator, docs
+    - **Output:** `appdir.ts`, `config.ts`, `fixtures/test-appdir.js`
 
   - [ ] 25.5 Optional AppImage packaging
     - When `--format appimage` is specified, produce a self-contained

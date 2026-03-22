@@ -286,6 +286,116 @@ test('Icon validation: non-.png rejected', () => {
   }
 });
 
+// ── Metainfo tests (unit, any platform) ──
+
+// Test 10: default metainfo generated
+test('Metainfo: file exists in usr/share/metainfo/', () => {
+  const dir = path.join(result1, 'usr', 'share', 'metainfo');
+  const files = fs.readdirSync(dir);
+  if (files.length === 0) throw new Error('No metainfo file');
+  if (!files[0].endsWith('.metainfo.xml'))
+    throw new Error('File not .metainfo.xml: ' + files[0]);
+});
+
+test('Metainfo: valid XML structure', () => {
+  const dir = path.join(result1, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<?xml version=')) throw new Error('Missing XML declaration');
+  if (!content.includes('<component type="desktop-application">'))
+    throw new Error('Missing component element');
+  if (!content.includes('</component>')) throw new Error('Missing closing component');
+});
+
+test('Metainfo: has required keys (id, name, summary, metadata_license)', () => {
+  const dir = path.join(result1, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<id>')) throw new Error('Missing <id>');
+  if (!content.includes('<name>')) throw new Error('Missing <name>');
+  if (!content.includes('<summary>')) throw new Error('Missing <summary>');
+  if (!content.includes('<metadata_license>')) throw new Error('Missing <metadata_license>');
+});
+
+test('Metainfo: references .desktop file via launchable', () => {
+  const dir = path.join(result1, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<launchable type="desktop-id">'))
+    throw new Error('Missing launchable');
+  if (!content.includes('.desktop</launchable>'))
+    throw new Error('Launchable does not reference .desktop');
+});
+
+// Test 11: metainfo with custom metadata
+const fakeExec6 = path.join(tmpDir, 'meta-app');
+fs.writeFileSync(fakeExec6, '#!/bin/sh\necho test', { mode: 0o755 });
+
+const result5 = createAppDir({
+  executablePath: fakeExec6,
+  outputPath: path.join(tmpDir, 'MetaApp'),
+  appName: 'meta-app',
+  linux: {
+    name: 'Meta Application',
+    summary: 'A test application for metainfo',
+    description: 'This is a longer description of the application.',
+    url: 'https://example.com/meta-app',
+    license: 'MIT',
+    version: '2.0.0',
+  },
+});
+
+test('Metainfo: custom name appears', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<name>Meta Application</name>'))
+    throw new Error('Custom name not found');
+});
+
+test('Metainfo: custom summary appears', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('A test application for metainfo'))
+    throw new Error('Custom summary not found');
+});
+
+test('Metainfo: description paragraph', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<description>'))
+    throw new Error('Missing description element');
+  if (!content.includes('longer description'))
+    throw new Error('Description text not found');
+});
+
+test('Metainfo: homepage URL', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('https://example.com/meta-app'))
+    throw new Error('Homepage URL not found');
+});
+
+test('Metainfo: project license', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<project_license>MIT</project_license>'))
+    throw new Error('License not found');
+});
+
+test('Metainfo: version in releases', () => {
+  const dir = path.join(result5, 'usr', 'share', 'metainfo');
+  const file = fs.readdirSync(dir).find(f => f.endsWith('.metainfo.xml'));
+  const content = fs.readFileSync(path.join(dir, file), 'utf8');
+  if (!content.includes('<releases>')) throw new Error('Missing releases');
+  if (!content.includes('version="2.0.0"'))
+    throw new Error('Version not found in release');
+});
+
 // ── CLI validation tests (run on any platform) ──
 
 const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hk-appdir-cli-'));

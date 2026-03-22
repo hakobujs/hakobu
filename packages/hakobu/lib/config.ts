@@ -106,6 +106,16 @@ export interface HakobuConfig {
     icon?: string;
     /** Path to a .png file to place as the application icon. */
     iconPath?: string;
+    /** One-line summary for AppStream metainfo. */
+    summary?: string;
+    /** Longer description for AppStream metainfo. */
+    description?: string;
+    /** Homepage URL for AppStream metainfo. */
+    url?: string;
+    /** SPDX license identifier (e.g., 'MIT', 'Apache-2.0'). */
+    license?: string;
+    /** Application version for AppStream metainfo. */
+    version?: string;
   };
 }
 

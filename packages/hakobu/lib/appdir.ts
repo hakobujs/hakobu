@@ -74,6 +74,35 @@ export interface LinuxDesktopMetadata {
    * and to the AppDir root (AppImage convention).
    */
   iconPath?: string;
+
+  /**
+   * One-line summary for AppStream metainfo.
+   * If not set, falls back to `comment`, then a generic summary.
+   */
+  summary?: string;
+
+  /**
+   * Longer description for AppStream metainfo (plain text).
+   * Optional — metainfo is valid without it.
+   */
+  description?: string;
+
+  /**
+   * Homepage URL for AppStream metainfo.
+   */
+  url?: string;
+
+  /**
+   * SPDX license identifier for AppStream metainfo.
+   * Example: 'MIT', 'Apache-2.0', 'GPL-3.0-or-later'
+   */
+  license?: string;
+
+  /**
+   * Application version for AppStream metainfo.
+   * Default: '1.0.0'
+   */
+  version?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -111,6 +140,81 @@ function generateDesktopFile(
   }
 
   return lines.join('\n') + '\n';
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// AppStream metainfo generation
+// ─────────────────────────────────────────────────────────────────────
+
+function xmlEsc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Derive a reverse-DNS component ID from an app name.
+ */
+function deriveComponentId(appName: string): string {
+  const clean = appName
+    .replace(/^@[^/]+\//, '')
+    .replace(/[^a-zA-Z0-9.-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `com.hakobu.${clean || 'app'}`;
+}
+
+/**
+ * Generate an AppStream metainfo XML file.
+ * https://www.freedesktop.org/software/appstream/docs/
+ *
+ * Produces a minimal valid <component type="desktop-application">
+ * with the fields available from config/package.json.
+ */
+function generateMetainfo(
+  appName: string,
+  meta?: LinuxDesktopMetadata,
+): string {
+  const id = deriveComponentId(appName);
+  const name = meta?.name || appName;
+  const summary = meta?.summary || meta?.comment || `${name} application`;
+  const metadataLicense = 'FSFAP'; // Free for all purposes — standard for metainfo files
+  const projectLicense = meta?.license || 'LicenseRef-Proprietary';
+  const desktopId = `${appName}.desktop`;
+
+  const lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<component type="desktop-application">',
+    `  <id>${xmlEsc(id)}</id>`,
+    `  <name>${xmlEsc(name)}</name>`,
+    `  <summary>${xmlEsc(summary)}</summary>`,
+    `  <metadata_license>${xmlEsc(metadataLicense)}</metadata_license>`,
+    `  <project_license>${xmlEsc(projectLicense)}</project_license>`,
+    `  <launchable type="desktop-id">${xmlEsc(desktopId)}</launchable>`,
+  ];
+
+  if (meta?.description) {
+    lines.push('  <description>');
+    lines.push(`    <p>${xmlEsc(meta.description)}</p>`);
+    lines.push('  </description>');
+  }
+
+  if (meta?.url) {
+    lines.push(`  <url type="homepage">${xmlEsc(meta.url)}</url>`);
+  }
+
+  if (meta?.version) {
+    lines.push('  <releases>');
+    lines.push(`    <release version="${xmlEsc(meta.version)}" />`);
+    lines.push('  </releases>');
+  }
+
+  lines.push('</component>');
+  lines.push('');
+
+  return lines.join('\n');
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -228,6 +332,13 @@ export function createAppDir(opts: AppDirOptions): string {
 
     log.info(`  icon: ${iconName}`);
   }
+
+  // Write AppStream metainfo
+  const metainfoContent = generateMetainfo(appName, opts.linux);
+  fs.writeFileSync(
+    path.join(metainfoDir, `${appName}.metainfo.xml`),
+    metainfoContent,
+  );
 
   log.info(`Created Linux AppDir: ${appDirPath}`);
 
