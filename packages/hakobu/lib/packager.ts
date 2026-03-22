@@ -200,7 +200,34 @@ export async function packageMultiple(
   log.info(`  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`);
   log.info(`  files: ${Object.keys(manifest.files).length}`);
 
-  // ── Per-target: fetch, pack, produce ──
+  // ── Pre-fetch: download all base binaries in parallel ──
+  // Each target has a unique platform-arch, so no cache file races.
+  const parsedTargets = targetSpecs.map(spec => ({
+    spec,
+    ...parseTarget(spec),
+  }));
+
+  log.info(`\nFetching ${parsedTargets.length} base binaries...`);
+  const fetchResults = await Promise.allSettled(
+    parsedTargets.map(t =>
+      need({ nodeRange: t.nodeRange, platform: t.platform, arch: t.arch })
+        .then(binaryPath => {
+          log.info(`  fetched: ${t.platform}-${t.arch}`);
+          return binaryPath;
+        })
+    )
+  );
+
+  // Map fetch results by spec for lookup during per-target assembly
+  const fetchedBinaries = new Map<string, string>();
+  for (let i = 0; i < parsedTargets.length; i++) {
+    const result = fetchResults[i];
+    if (result.status === 'fulfilled') {
+      fetchedBinaries.set(parsedTargets[i].spec, result.value);
+    }
+  }
+
+  // ── Per-target: pack, produce ──
   fs.mkdirSync(outputDir, { recursive: true });
 
   const results: PackageMultipleResult[] = [];
@@ -210,6 +237,21 @@ export async function packageMultiple(
     const outputPath = path.join(outputDir, outputName);
 
     log.info(`\n  [${targetSpec.platform}-${targetSpec.arch}]`);
+
+    // Check if fetch succeeded for this target
+    const prefetchedBinary = fetchedBinaries.get(spec);
+    if (!prefetchedBinary) {
+      const fetchResult = fetchResults[targetSpecs.indexOf(spec)];
+      const fetchError = fetchResult.status === 'rejected' ? fetchResult.reason?.message : 'unknown';
+      results.push({
+        target: targetSpec,
+        status: 'failed',
+        outputPath,
+        fileCount: 0,
+        error: `Base binary fetch failed: ${fetchError}`,
+      });
+      continue;
+    }
 
     try {
       const result = await packageAppForTarget(

@@ -431,11 +431,15 @@
     - _Depends on: 3.3_
     - **Output:** `packages/hakobu-fetch/lib/index.ts` (cache verification in `need()`)
 
-  - [ ] 21.2 Add parallel base binary fetching for multi-target builds
-    - Fetch base binaries concurrently when `packageMultiple()` targets
-      multiple platforms
-    - Keep serial fallback for environments with limited network
+  - [x] 21.2 Add parallel base binary fetching for multi-target builds
+    - `packageMultiple()` now pre-fetches all base binaries via
+      `Promise.allSettled()` before the per-target assembly loop
+    - Each target has a unique platform-arch → no cache file races
+    - Failed fetches produce per-target errors without blocking other targets
+    - Per-target assembly then hits cache instantly (already verified by 21.1)
+    - Single-target `packageApp()` unchanged
     - _Depends on: 18.2_
+    - **Output:** parallel pre-fetch in `packageMultiple()` in `packages/hakobu/lib/packager.ts`
 
   - [ ] 21.3 Support offline/air-gapped packaging
     - Allow pre-populating the base binary cache from a local directory
