@@ -537,7 +537,7 @@
     - **Output:** `pe-metadata.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `docs/exe-metadata.md`
 
-- [ ] 24. macOS application bundle output
+- [x] 24. macOS application bundle output
   - [x] 24.1 Generate `.app` bundle structure from packaged executable
     - Added `--app-bundle` CLI flag and `appBundle` config option
     - When enabled for macOS targets, produces standard `.app` bundle:
@@ -607,12 +607,23 @@
     - **Output:** `mach-o.ts`, `packager.ts`, `docs/macos-notarization.md`,
       `fixtures/test-app-bundle.js`
 
-  - [ ] 24.5 Add fixture / verification for `.app` output
-    - Create a fixture that packages a simple project as `.app`,
-      verifies bundle structure, `Info.plist` content, and that the
-      executable inside runs correctly
+  - [x] 24.5 Add fixture / verification for `.app` output
+    - `fixtures/test-app-bundle.js` with 28 tests covering:
+      - Bundle structure (directory, Contents/MacOS, Contents/Resources)
+      - Info.plist content (required keys, metadata fields, defaults)
+      - Info.plist well-formedness (XML structure, key/string balance)
+      - Icon placement and CFBundleIconFile reference
+      - Icon validation (non-.icns rejected)
+      - Config-based metadata from package.json `hakobu.macos`
+      - Combined metadata + icon in one bundle
+      - Inner executable correctness after bundle creation
+      - Ad-hoc bundle signing (codesign --verify --deep)
+      - Raw executable output unchanged without --app-bundle
+      - .app auto-appended when missing from --output
+    - Added to CI RC gate (`ci.yml`) — runs on macOS runner
+    - Skips gracefully on non-macOS platforms
     - _Depends on: 24.2_
-    - **Output:** `.app` bundle fixture or verification script
+    - **Output:** `fixtures/test-app-bundle.js`, `.github/workflows/ci.yml`
 
 - [ ] 25. Linux desktop and distribution artifacts
   - [ ] 25.1 Generate AppDir-style directory output

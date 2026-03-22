@@ -181,6 +181,9 @@ jobs:
       - name: Multi-target verification
         run: node fixtures/test-multi-target.js
 
+      - name: App bundle verification
+        run: node fixtures/test-app-bundle.js
+
       - name: Publish dry-run — @hakobu/hakobu-fetch
         working-directory: packages/hakobu-fetch
         run: |

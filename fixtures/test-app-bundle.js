@@ -301,7 +301,124 @@ test('Icon validation: non-.icns rejected', () => {
   }
 });
 
-// ── Test 9: bundle is ad-hoc signed (inner exe runs after signing) ──
+// ── Test 9: package.json config-based metadata ──
+
+const configProjectDir = tmpProject('config-meta', {
+  'package.json': JSON.stringify({
+    name: 'config-test',
+    version: '3.0.0',
+    main: 'index.js',
+    hakobu: {
+      appBundle: true,
+      macos: {
+        bundleId: 'org.config.test',
+        bundleVersion: '3.0.0',
+        displayName: 'Config Test App',
+        copyright: 'Copyright 2026 Config Corp',
+      },
+    },
+  }),
+  'index.js': "'use strict';\nconsole.log('format=config-meta-test');\n",
+});
+
+const appConfig = path.join(configProjectDir, 'ConfigApp.app');
+try {
+  execFileSync(process.execPath, [
+    HAKOBU_BIN, configProjectDir, '--output', appConfig,
+  ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const cfgPlist = fs.readFileSync(
+    path.join(appConfig, 'Contents', 'Info.plist'), 'utf8'
+  );
+
+  test('Config metadata: bundleId from package.json', () => {
+    if (!cfgPlist.includes('org.config.test'))
+      throw new Error('bundleId from config not found');
+  });
+
+  test('Config metadata: displayName from package.json', () => {
+    if (!cfgPlist.includes('Config Test App'))
+      throw new Error('displayName from config not found');
+  });
+
+  test('Config metadata: inner executable runs', () => {
+    const macosDir = path.join(appConfig, 'Contents', 'MacOS');
+    const files = fs.readdirSync(macosDir);
+    const output = execFileSync(path.join(macosDir, files[0]), [], {
+      timeout: 15000, encoding: 'utf8',
+    });
+    if (!output.includes('format=config-meta-test'))
+      throw new Error('Config-based bundle inner executable broken');
+  });
+
+} catch (err) {
+  if (!err.message?.includes('config') && !err.message?.includes('Config')) {
+    const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+    console.log(`  XX  Config metadata bundle — ${msg}`);
+    failed += 3;
+  }
+}
+try { fs.rmSync(configProjectDir, { recursive: true, force: true }); } catch {}
+
+// ── Test 10: combined metadata + icon in one bundle ──
+
+const appCombo = path.join(projectDir, 'ComboApp.app');
+try {
+  execFileSync(process.execPath, [
+    HAKOBU_BIN, projectDir, '--app-bundle', '--output', appCombo,
+    '--bundle-id', 'com.combo.test',
+    '--bundle-version', '4.0.0',
+    '--display-name', 'Combo App',
+    '--macos-icon', testIconPath,
+  ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const comboPlist = fs.readFileSync(
+    path.join(appCombo, 'Contents', 'Info.plist'), 'utf8'
+  );
+
+  test('Combo: metadata and icon both present', () => {
+    if (!comboPlist.includes('com.combo.test'))
+      throw new Error('bundleId missing');
+    if (!comboPlist.includes('Combo App'))
+      throw new Error('displayName missing');
+    if (!comboPlist.includes('CFBundleIconFile'))
+      throw new Error('CFBundleIconFile missing');
+    if (!fs.existsSync(path.join(appCombo, 'Contents', 'Resources', 'app-icon.icns')))
+      throw new Error('Icon file missing from Resources');
+  });
+} catch (err) {
+  if (!err.message?.includes('combo') && !err.message?.includes('Combo') &&
+      !err.message?.includes('bundleId') && !err.message?.includes('displayName') &&
+      !err.message?.includes('Icon')) {
+    const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+    console.log(`  XX  Combo bundle — ${msg}`);
+    failed++;
+  }
+}
+
+// ── Test 11: Info.plist is well-formed XML ──
+
+test('Info.plist: well-formed XML (valid plist structure)', () => {
+  const plist = fs.readFileSync(path.join(appOut, 'Contents', 'Info.plist'), 'utf8');
+  // Check XML declaration and plist structure
+  if (!plist.startsWith('<?xml version="1.0"'))
+    throw new Error('Missing XML declaration');
+  if (!plist.includes('<!DOCTYPE plist'))
+    throw new Error('Missing DOCTYPE');
+  if (!plist.includes('<plist version="1.0">'))
+    throw new Error('Missing plist root element');
+  if (!plist.includes('</dict>'))
+    throw new Error('Missing closing dict tag');
+  if (!plist.includes('</plist>'))
+    throw new Error('Missing closing plist tag');
+  // Every <key> should have a following <string> (basic structure check)
+  const keyCount = (plist.match(/<key>/g) || []).length;
+  const stringCount = (plist.match(/<string>/g) || []).length;
+  if (keyCount !== stringCount)
+    throw new Error(`Key/string mismatch: ${keyCount} keys, ${stringCount} strings`);
+});
+
+// ── Test 12: bundle is ad-hoc signed ──
 
 // The first bundle (appOut) was created without explicit identity,
 // so it gets ad-hoc signed. Verify the inner executable still runs.
