@@ -51,6 +51,14 @@ macOS bundle metadata (used with --app-bundle):
   --macos-icon <path>   Path to .icns file for the app icon
                         Also configurable via "hakobu.macos" in package.json
 
+Linux AppDir metadata (used with --appdir):
+  --desktop-name <n>    Application name in .desktop file
+  --desktop-comment <s> Short description / tooltip
+  --desktop-categories <c>  Semicolon-separated categories (e.g., Utility;Development;)
+  --desktop-terminal    App needs a terminal (default: true)
+  --no-desktop-terminal App does not need a terminal
+                        Also configurable via "hakobu.linux" in package.json
+
 Signing:
   --sign-identity <id>  macOS code-signing identity (default: ad-hoc)
                         Also: HAKOBU_SIGN_IDENTITY env var
@@ -117,9 +125,10 @@ async function main() {
              'product-name', 'file-description', 'company-name', 'file-version',
              'product-version', 'icon',
              'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright',
-             'macos-icon'],
+             'macos-icon', 'desktop-name', 'desktop-comment', 'desktop-categories'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
-              'no-native-build', 'notarize', 'app-bundle', 'appdir'],
+              'no-native-build', 'notarize', 'app-bundle', 'appdir',
+              'desktop-terminal', 'no-desktop-terminal'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
@@ -207,6 +216,17 @@ async function main() {
         options.macos = { ...options.macos, ...cliMacos };
       }
 
+      // Linux desktop metadata — CLI flags override config
+      const cliLinux: Record<string, any> = {};
+      if (argv['desktop-name']) cliLinux.name = argv['desktop-name'];
+      if (argv['desktop-comment']) cliLinux.comment = argv['desktop-comment'];
+      if (argv['desktop-categories']) cliLinux.categories = argv['desktop-categories'];
+      if (argv['desktop-terminal']) cliLinux.terminal = true;
+      if (argv['no-desktop-terminal']) cliLinux.terminal = false;
+      if (Object.keys(cliLinux).length > 0) {
+        options.linux = { ...options.linux, ...cliLinux };
+      }
+
       // PE metadata — CLI flags override config
       const cliMeta: Record<string, string> = {};
       if (argv['product-name']) cliMeta.productName = argv['product-name'];
@@ -237,6 +257,7 @@ async function main() {
           appBundle: options.appBundle,
           macos: options.macos,
           appDir: options.appDir,
+          linux: options.linux,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

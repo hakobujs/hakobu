@@ -93,6 +93,18 @@ export interface HakobuConfig {
    * Only valid for Linux targets.
    */
   appDir?: boolean;
+
+  /**
+   * Linux desktop metadata for .desktop file generation.
+   * Only used when appDir is true.
+   */
+  linux?: {
+    name?: string;
+    comment?: string;
+    categories?: string;
+    terminal?: boolean;
+    icon?: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -307,6 +319,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       appBundle: hakobuConfig?.appBundle,
       macos: hakobuConfig?.macos,
       appDir: hakobuConfig?.appDir,
+      linux: hakobuConfig?.linux,
     },
     warnings,
   };

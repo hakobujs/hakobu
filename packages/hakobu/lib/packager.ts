@@ -44,6 +44,7 @@ import type { ExeMetadata } from './pe-metadata';
 import { createAppBundle } from './app-bundle';
 import type { MacosBundleMetadata } from './app-bundle';
 import { createAppDir, isLinuxPlatform } from './appdir';
+import type { LinuxDesktopMetadata } from './appdir';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -135,6 +136,9 @@ export interface PackageOptions {
    * directory (e.g., dist/MyApp.AppDir/).
    */
   appDir?: boolean;
+
+  /** Linux desktop metadata for .desktop file generation. */
+  linux?: LinuxDesktopMetadata;
 }
 
 export interface PackageResult {
@@ -205,6 +209,7 @@ export interface PackageMultipleOptions {
   appBundle?: boolean;
   macos?: MacosBundleMetadata;
   appDir?: boolean;
+  linux?: LinuxDesktopMetadata;
 }
 
 export interface PackageMultipleResult {
@@ -506,6 +511,7 @@ async function packageAppForTarget(
           executablePath: target.output,
           outputPath: outputPath,
           appName: manifest.appId,
+          linux: options.linux,
         });
       }
     }
@@ -812,6 +818,7 @@ async function packageAppInner(
           executablePath: target.output,
           outputPath: requestedOutput,
           appName: manifest.appId,
+          linux: options.linux,
         });
       }
     }

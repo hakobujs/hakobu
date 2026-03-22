@@ -644,18 +644,25 @@
     - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-appdir.js`, `.github/workflows/ci.yml`
 
-  - [ ] 25.2 Generate `.desktop` file from metadata
-    - Produce a valid `.desktop` entry from config / CLI metadata:
-      Name, Comment, Exec, Icon, Categories, Terminal
-    - Read from `"hakobu": { "linux": { ... } }` in package.json
-    - Sensible defaults: Name from package name, Exec pointing to the
-      binary, Terminal=true for CLI apps
-    - CLI overrides: `--desktop-name`, `--desktop-categories`,
-      `--desktop-terminal` (reuse `--product-name`, `--file-description`
-      where they map cleanly)
-    - Validate against the Desktop Entry Specification
+  - [x] 25.2 Generate `.desktop` file from metadata
+    - Added `LinuxDesktopMetadata` interface to `appdir.ts` with fields:
+      name, comment, categories, terminal, icon
+    - `generateDesktopFile()` produces a valid Desktop Entry Specification
+      file with: [Desktop Entry], Type, Name, Exec, Icon, Categories,
+      Terminal, and optional Comment
+    - Config via `"hakobu": { "linux": { ... } }` in package.json
+    - CLI flags: `--desktop-name`, `--desktop-comment`,
+      `--desktop-categories`, `--desktop-terminal` / `--no-desktop-terminal`
+    - Sensible defaults: Name from appName, Exec from binary name,
+      Categories=Utility;, Terminal=true, Icon from appName
+    - `.desktop` file placed at `AppDir/usr/share/applications/<appName>.desktop`
+    - Generated in all AppDir output (defaults valid when no metadata given)
+    - 18/18 verification tests (8 new .desktop tests: file exists,
+      required keys, Exec reference, default Terminal, custom Name/
+      Comment/Categories, Terminal=false)
     - _Depends on: 25.1_
-    - **Output:** `.desktop` generator, config/CLI plumbing, docs
+    - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-appdir.js`
 
   - [ ] 25.3 Support PNG icon placement for Linux
     - Accept icon path(s) via config (`metadata.linuxIcon`) or CLI

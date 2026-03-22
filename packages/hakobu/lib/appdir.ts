@@ -26,6 +26,87 @@ import path from 'path';
 import { log } from './log';
 
 // ─────────────────────────────────────────────────────────────────────
+// Metadata types
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Linux desktop metadata for .desktop file generation.
+ *
+ * All fields are optional — sensible defaults are derived from the
+ * app name when not specified.
+ */
+export interface LinuxDesktopMetadata {
+  /**
+   * Name — user-visible application name.
+   * Default: derived from appName
+   */
+  name?: string;
+
+  /**
+   * Comment — short description of the application.
+   * Shown as a tooltip in some desktop environments.
+   */
+  comment?: string;
+
+  /**
+   * Categories — semicolon-separated list of desktop categories.
+   * Example: 'Utility;Development;'
+   * Default: 'Utility;'
+   */
+  categories?: string;
+
+  /**
+   * Terminal — whether the app needs a terminal to run.
+   * Default: true (CLI apps typically need a terminal)
+   */
+  terminal?: boolean;
+
+  /**
+   * Icon — icon name (without path or extension).
+   * Referenced from the hicolor icon theme.
+   * Default: appName
+   */
+  icon?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// .desktop file generation
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a .desktop file conforming to the Desktop Entry Specification.
+ * https://specifications.freedesktop.org/desktop-entry-spec/latest/
+ */
+function generateDesktopFile(
+  executableName: string,
+  appName: string,
+  meta?: LinuxDesktopMetadata,
+): string {
+  const name = meta?.name || appName;
+  const icon = meta?.icon || appName;
+  const categories = meta?.categories || 'Utility;';
+  // Ensure categories ends with semicolon (spec requirement)
+  const cats = categories.endsWith(';') ? categories : categories + ';';
+  const terminal = meta?.terminal !== undefined ? meta.terminal : true;
+
+  const lines = [
+    '[Desktop Entry]',
+    'Type=Application',
+    `Name=${name}`,
+    `Exec=${executableName}`,
+    `Icon=${icon}`,
+    `Categories=${cats}`,
+    `Terminal=${terminal ? 'true' : 'false'}`,
+  ];
+
+  if (meta?.comment) {
+    lines.splice(3, 0, `Comment=${meta.comment}`);
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // AppDir creation
 // ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +125,9 @@ export interface AppDirOptions {
    * Defaults to the executable filename.
    */
   appName?: string;
+
+  /** Linux desktop metadata for .desktop file generation. */
+  linux?: LinuxDesktopMetadata;
 }
 
 /**
@@ -104,6 +188,14 @@ export function createAppDir(opts: AppDirOptions): string {
   // Write AppRun launcher
   const appRunPath = path.join(appDirPath, 'AppRun');
   fs.writeFileSync(appRunPath, generateAppRun(execName), { mode: 0o755 });
+
+  // Write .desktop file
+  const desktopContent = generateDesktopFile(execName, appName, opts.linux);
+  const desktopFileName = `${appName}.desktop`;
+  fs.writeFileSync(
+    path.join(applicationsDir, desktopFileName),
+    desktopContent,
+  );
 
   log.info(`Created Linux AppDir: ${appDirPath}`);
 

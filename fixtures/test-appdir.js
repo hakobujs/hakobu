@@ -121,6 +121,97 @@ test('Executable: moved into AppDir (not copied)', () => {
   if (!fs.existsSync(movedExec)) throw new Error('Executable not in usr/bin/');
 });
 
+// ── .desktop file tests (unit, any platform) ──
+
+// Test 5: default .desktop file is generated
+test('.desktop: default file exists in usr/share/applications/', () => {
+  const appsDir = path.join(result1, 'usr', 'share', 'applications');
+  const files = fs.readdirSync(appsDir);
+  if (files.length === 0) throw new Error('No .desktop file generated');
+  if (!files[0].endsWith('.desktop'))
+    throw new Error('File does not end with .desktop: ' + files[0]);
+});
+
+test('.desktop: has required Desktop Entry keys', () => {
+  const appsDir = path.join(result1, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('[Desktop Entry]'))
+    throw new Error('Missing [Desktop Entry] header');
+  if (!content.includes('Type=Application'))
+    throw new Error('Missing Type=Application');
+  if (!content.includes('Name='))
+    throw new Error('Missing Name key');
+  if (!content.includes('Exec='))
+    throw new Error('Missing Exec key');
+  if (!content.includes('Terminal='))
+    throw new Error('Missing Terminal key');
+});
+
+test('.desktop: Exec references the binary name', () => {
+  const appsDir = path.join(result1, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Exec=my-app'))
+    throw new Error('Exec does not reference my-app');
+});
+
+test('.desktop: default Terminal=true for CLI apps', () => {
+  const appsDir = path.join(result1, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Terminal=true'))
+    throw new Error('Terminal should default to true');
+});
+
+// Test 6: .desktop with custom metadata
+const fakeExec3 = path.join(tmpDir, 'custom-app');
+fs.writeFileSync(fakeExec3, '#!/bin/sh\necho test', { mode: 0o755 });
+
+const result3 = createAppDir({
+  executablePath: fakeExec3,
+  outputPath: path.join(tmpDir, 'CustomApp'),
+  appName: 'custom-app',
+  linux: {
+    name: 'My Custom App',
+    comment: 'Does amazing things',
+    categories: 'Development;Utility;',
+    terminal: false,
+  },
+});
+
+test('.desktop: custom Name from linux metadata', () => {
+  const appsDir = path.join(result3, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Name=My Custom App'))
+    throw new Error('Custom Name not found');
+});
+
+test('.desktop: custom Comment from linux metadata', () => {
+  const appsDir = path.join(result3, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Comment=Does amazing things'))
+    throw new Error('Custom Comment not found');
+});
+
+test('.desktop: custom Categories from linux metadata', () => {
+  const appsDir = path.join(result3, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Categories=Development;Utility;'))
+    throw new Error('Custom Categories not found');
+});
+
+test('.desktop: Terminal=false when configured', () => {
+  const appsDir = path.join(result3, 'usr', 'share', 'applications');
+  const desktopFile = fs.readdirSync(appsDir).find(f => f.endsWith('.desktop'));
+  const content = fs.readFileSync(path.join(appsDir, desktopFile), 'utf8');
+  if (!content.includes('Terminal=false'))
+    throw new Error('Terminal should be false');
+});
+
 // ── CLI validation tests (run on any platform) ──
 
 const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hk-appdir-cli-'));
