@@ -387,3 +387,101 @@
     - Updated docs/runtime-support.md with bytecode mode section
     - _Depends on: 19.3, 17.3_
     - **Output:** `fixtures/test-bytecode.js`, `docs/runtime-support.md`, fabricator fixes in `packager.ts`
+
+# ─────────────────────────────────────────────────────────────────────
+# Post-19 Roadmap
+# ─────────────────────────────────────────────────────────────────────
+
+- [ ] 20. Release hardening and RC process
+  - [ ] 20.1 Define a formal release-candidate gate
+    - Add a `release-candidate` CI workflow or manual step that runs the
+      full fixture matrix, multi-target smoke, bytecode verification, and
+      source-map checks in a single gated pass
+    - Gate `release.yml` on this combined pass
+    - _Depends on: 13.3, 15.2_
+
+  - [ ] 20.2 Add npm publish dry-run and tarball verification
+    - Run `pnpm pack --dry-run` in CI to verify the published file list
+      matches the `"files"` field in each package.json
+    - Reject releases where unexpected files would be published or expected
+      files are missing
+    - _Depends on: 13.3_
+
+  - [ ] 20.3 Add changelog generation
+    - Generate changelogs from conventional commit messages between tags
+    - Include changelog in GitHub Releases and/or a CHANGELOG.md file
+    - _Depends on: 13.3_
+
+- [ ] 21. Cache and fetch robustness
+  - [ ] 21.1 Add integrity verification on cached base binaries
+    - Verify SHA-256 of cached binaries before use, not just after download
+    - Detect and re-fetch corrupted cache entries instead of producing
+      broken executables
+    - _Depends on: 3.3_
+
+  - [ ] 21.2 Add parallel base binary fetching for multi-target builds
+    - Fetch base binaries concurrently when `packageMultiple()` targets
+      multiple platforms
+    - Keep serial fallback for environments with limited network
+    - _Depends on: 18.2_
+
+  - [ ] 21.3 Support offline/air-gapped packaging
+    - Allow pre-populating the base binary cache from a local directory
+      or archive without network access
+    - Document the offline workflow for CI environments behind firewalls
+    - _Depends on: 21.1_
+
+- [ ] 22. Broader real-world fixture coverage
+  - [ ] 22.1 Add a real npm-dependency fixture
+    - Package a project that depends on a real npm package (e.g., `chalk`,
+      `commander`, or `dotenv`) with node_modules resolved from disk
+    - Verify the packaged executable runs correctly with the dependency
+    - _Depends on: 12.1_
+
+  - [ ] 22.2 Add a native addon fixture with a real compiled .node file
+    - Package a project using a real compiled addon (e.g., `better-sqlite3`
+      or a minimal custom addon built with node-gyp)
+    - Verify extraction and dlopen at runtime in the packaged executable
+    - _Depends on: 9.1, 12.2_
+
+  - [ ] 22.3 Add a bytecode + CJS multi-module fixture
+    - Package a non-trivial CJS project with `--bytecode` that has multiple
+      internal modules, circular requires, and JSON loading
+    - Verify correct execution and compare output against source-only mode
+    - _Depends on: 19.4_
+
+- [ ] 23. Artifact signing and distribution ergonomics
+  - [ ] 23.1 Add macOS notarization support
+    - After codesigning the output executable, submit it for Apple notarization
+      when a signing identity and Apple credentials are provided
+    - Keep ad-hoc signing as the default when no identity is configured
+    - _Depends on: 10.1_
+
+  - [ ] 23.2 Add Windows Authenticode signing support
+    - Sign the output .exe with an Authenticode certificate when provided
+    - Document the signing workflow for CI environments
+    - _Depends on: 10.1_
+
+  - [ ] 23.3 Add output metadata injection
+    - Inject version/icon/description metadata into Windows PE executables
+      and macOS Mach-O binaries where the format supports it
+    - Read metadata from package.json or a dedicated config section
+    - _Depends on: 10.1_
+
+- [ ] 24. Node version line expansion
+  - [ ] 24.1 Evaluate Node 25 as a supported base binary line
+    - Determine whether the existing C++/V8 patches apply cleanly to Node 25
+    - Build and verify patched bases for the Tier 1 target matrix
+    - If patches conflict, identify the minimum changes needed
+    - _Depends on: 3.1_
+
+  - [ ] 24.2 Support multiple Node lines in the same Hakobu installation
+    - Allow `--target node25-linux-x64` alongside `--target node24-linux-x64`
+    - Manage per-line base binary cache and expected SHAs
+    - _Depends on: 24.1, 21.1_
+
+  - [ ] 24.3 Add Node line selection to the config contract
+    - Support `hakobu.nodeRange: "node25"` in package.json
+    - Normalize legacy `node18`/`node20`/`node22` references with clear
+      rejection or migration messages
+    - _Depends on: 24.2, 10.3_
