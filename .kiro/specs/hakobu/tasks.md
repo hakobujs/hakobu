@@ -538,12 +538,23 @@
       `docs/exe-metadata.md`
 
 - [ ] 24. macOS application bundle output
-  - [ ] 24.1 Generate `.app` bundle structure from packaged executable
-    - Add an `--app-bundle` (or `--format app`) output mode for macOS targets
-    - Generate the standard `.app/Contents/MacOS/<binary>` directory layout
-    - Copy the packaged Mach-O executable into the bundle
+  - [x] 24.1 Generate `.app` bundle structure from packaged executable
+    - Added `--app-bundle` CLI flag and `appBundle` config option
+    - When enabled for macOS targets, produces standard `.app` bundle:
+      `MyApp.app/Contents/MacOS/<binary>`, `Contents/Info.plist` (minimal),
+      `Contents/Resources/` (empty, for icons in 24.3)
+    - Producer writes to a temp path; `createAppBundle()` moves the
+      executable into the bundle and generates a minimal Info.plist
+      (CFBundleExecutable, CFBundleName, CFBundlePackageType)
+    - `--output` specifies the `.app` path; `.app` is auto-appended if
+      missing
     - Raw executable output remains the default; `.app` is opt-in
+    - Clear error if `--app-bundle` is used with non-macOS targets
+    - Verification: 9/9 tests pass (bundle structure, inner executable
+      runs, auto-append, default raw output unchanged)
     - _Depends on: 10.1, 23.1_
+    - **Output:** `app-bundle.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-app-bundle.js`
 
   - [ ] 24.2 Generate `Info.plist` with app metadata
     - Produce a well-formed `Info.plist` from config / CLI metadata fields:

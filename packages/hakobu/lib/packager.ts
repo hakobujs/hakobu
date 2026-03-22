@@ -38,6 +38,7 @@ import { patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable } fr
 import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-sign';
 import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
+import { createAppBundle } from './app-bundle';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -112,6 +113,13 @@ export interface PackageOptions {
    * See docs/exe-metadata.md for details.
    */
   metadata?: ExeMetadata;
+
+  /**
+   * Produce a macOS .app bundle instead of a raw executable.
+   * Only valid for macOS targets. The output path becomes the .app
+   * directory (e.g., dist/MyApp.app/).
+   */
+  appBundle?: boolean;
 }
 
 export interface PackageResult {
@@ -179,6 +187,7 @@ export interface PackageMultipleOptions {
   winCertPath?: string;
   winCertPassword?: string;
   metadata?: ExeMetadata;
+  appBundle?: boolean;
 }
 
 export interface PackageMultipleResult {
@@ -396,14 +405,18 @@ async function packageAppForTarget(
     const slash = targetSpec.platform === 'win' ? '\\' : '/';
     const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
 
-    fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+    // In app-bundle mode, write the raw executable to a temp path
+    const producerOutput = options.appBundle && targetSpec.platform === 'macos'
+      ? path.join(os.tmpdir(), `hakobu-ab-${manifest.appId}-${Date.now()}`)
+      : outputPath;
+    fs.mkdirSync(path.dirname(path.resolve(producerOutput)), { recursive: true });
 
     const target: Target = {
       nodeRange: targetSpec.nodeRange,
       platform: targetSpec.platform as any,
       arch: targetSpec.arch,
       binaryPath: preparedBase.effectiveBinaryPath,
-      output: path.resolve(outputPath),
+      output: path.resolve(producerOutput),
       fabricator: {
         nodeRange: targetSpec.nodeRange,
         platform: system.hostPlatform as any,
@@ -448,11 +461,21 @@ async function packageAppForTarget(
       await plusx(target.output);
     }
 
+    // App bundle wrapping (macOS only, opt-in)
+    let finalOutputPath = path.resolve(outputPath);
+    if (options.appBundle && targetSpec.platform === 'macos') {
+      finalOutputPath = createAppBundle({
+        executablePath: target.output,
+        outputPath: outputPath,
+        appName: manifest.appId,
+      });
+    }
+
     // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
     shutdownFabricator();
 
     return {
-      outputPath: path.resolve(outputPath),
+      outputPath: finalOutputPath,
       manifest,
       fileCount: Object.keys(manifest.files).length,
       target: targetSpec,
@@ -483,6 +506,17 @@ function defaultOutputName(appId: string, target: { platform: string; arch: stri
 // ─────────────────────────────────────────────────────────────────────
 
 export async function packageApp(options: PackageOptions): Promise<PackageResult> {
+  // ── App bundle validation ──
+  if (options.appBundle) {
+    const targetSpec = parseTarget(options.target || '');
+    if (targetSpec.platform !== 'macos') {
+      throw new Error(
+        `--app-bundle is only supported for macOS targets (got ${targetSpec.platform}).\n` +
+        'macOS .app bundles require a Mach-O executable.'
+      );
+    }
+  }
+
   // ── Bytecode mode validation ──
   if (options.bytecode && options.bundle) {
     throw new Error(
@@ -626,7 +660,11 @@ async function packageAppInner(
     });
 
     // ── 6. Build target object for producer ──
-    const outputPath = options.output || defaultOutputPath(manifest.appId, targetSpec);
+    const requestedOutput = options.output || defaultOutputPath(manifest.appId, targetSpec);
+    // In app-bundle mode, the producer writes to a temp file; createAppBundle moves it into the .app
+    const outputPath = options.appBundle && targetSpec.platform === 'macos'
+      ? path.join(os.tmpdir(), `hakobu-ab-${manifest.appId}-${Date.now()}`)
+      : requestedOutput;
     fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
     const target: Target = {
@@ -691,12 +729,22 @@ async function packageAppInner(
       await plusx(target.output);
     }
 
+    // App bundle wrapping (macOS only, opt-in)
+    let finalOutputPath = path.resolve(requestedOutput);
+    if (options.appBundle && targetSpec.platform === 'macos') {
+      finalOutputPath = createAppBundle({
+        executablePath: target.output,
+        outputPath: requestedOutput,
+        appName: manifest.appId,
+      });
+    }
+
     shutdownFabricator();
 
-    log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${outputPath}`);
+    log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${finalOutputPath}`);
 
     return {
-      outputPath: path.resolve(outputPath),
+      outputPath: finalOutputPath,
       manifest,
       fileCount: Object.keys(manifest.files).length,
       target: targetSpec,

@@ -67,6 +67,12 @@ export interface HakobuConfig {
     productVersion?: string;
     icon?: string;
   };
+
+  /**
+   * Produce a macOS .app bundle instead of a raw executable.
+   * Only valid for macOS targets.
+   */
+  appBundle?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -278,6 +284,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       bundleExternal,
       bytecode: bytecode || undefined,
       metadata,
+      appBundle: hakobuConfig?.appBundle,
     },
     warnings,
   };

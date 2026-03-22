@@ -37,6 +37,8 @@ Bundle mode (optional — for TypeScript / monorepo projects):
 
 Advanced:
   --bytecode          Compile JS to V8 bytecode before packaging
+  --app-bundle        Wrap macOS output in a .app bundle (macOS only)
+                      Output path becomes the .app directory
 
 Signing:
   --sign-identity <id>  macOS code-signing identity (default: ad-hoc)
@@ -104,7 +106,7 @@ async function main() {
              'product-name', 'file-description', 'company-name', 'file-version',
              'product-version', 'icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
-              'no-native-build', 'notarize'],
+              'no-native-build', 'notarize', 'app-bundle'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
   });
@@ -176,6 +178,9 @@ async function main() {
       if (argv['win-cert']) options.winCertPath = argv['win-cert'];
       if (argv['win-cert-password']) options.winCertPassword = argv['win-cert-password'];
 
+      // App bundle
+      if (argv['app-bundle']) options.appBundle = true;
+
       // PE metadata — CLI flags override config
       const cliMeta: Record<string, string> = {};
       if (argv['product-name']) cliMeta.productName = argv['product-name'];
@@ -203,6 +208,7 @@ async function main() {
           winCertPath: options.winCertPath,
           winCertPassword: options.winCertPassword,
           metadata: options.metadata,
+          appBundle: options.appBundle,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);
