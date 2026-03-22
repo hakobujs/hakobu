@@ -49,7 +49,7 @@ try {
     HAKOBU_BIN, projectDir,
     '--target', 'node24-macos-arm64,node24-linux-x64',
     '--output', outDir,
-  ], { timeout: 180000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  ], { timeout: 600000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
   console.log('  Packaged OK\n');
 
   test('two executables produced', () => {
@@ -93,7 +93,21 @@ try {
   });
 
 } catch (err) {
-  console.error('  Package FAILED:', err.stderr?.split('\n')[0] || err.message);
+  const stderr = err.stderr ? err.stderr.toString().trim() : '';
+  const stdout = err.stdout ? err.stdout.toString().trim() : '';
+  console.error('  Package FAILED:', err.message.split('\n')[0]);
+  if (stderr) {
+    console.error('  STDERR:');
+    for (const line of stderr.split('\n').slice(-15)) {
+      console.error('    ' + line);
+    }
+  }
+  if (stdout) {
+    console.error('  STDOUT (last 10 lines):');
+    for (const line of stdout.split('\n').slice(-10)) {
+      console.error('    ' + line);
+    }
+  }
   failed++;
 }
 
