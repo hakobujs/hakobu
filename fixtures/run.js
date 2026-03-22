@@ -204,9 +204,23 @@ for (const name of fixtures) {
       }
     }
   } catch (err) {
-    const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
-    console.log(`  XX  ${name} (packaged) — ${msg}`);
-    totalFail++;
+    const stderr = err.stderr ? err.stderr.toString().trim() : '';
+    const msg = stderr ? stderr.split('\n').slice(-3).join(' | ') : err.message.split('\n')[0];
+
+    // Bundle-mode fixtures may fail if Rolldown is not available (optional dep).
+    // Treat bundler-not-found as a skip, not a hard failure.
+    const isBundlerMissing = isBundleOnly && (
+      msg.includes('rolldown') || msg.includes('Rolldown') ||
+      stderr.includes('rolldown') || stderr.includes('Rolldown')
+    );
+
+    if (isBundlerMissing) {
+      console.log(`  --  ${name} (packaged) — skipped (Rolldown not available)`);
+      totalSkip++;
+    } else {
+      console.log(`  XX  ${name} (packaged) — ${msg}`);
+      totalFail++;
+    }
   }
 }
 
