@@ -236,20 +236,36 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Generate changelog
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          PREV_TAG=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..${TAG}"
+          else
+            RANGE="HEAD"
+          fi
+          echo "Changelog range: $RANGE"
+          node scripts/generate-changelog.js "$RANGE" > /tmp/changelog.md
+          cat /tmp/changelog.md
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
-          VERSION="${{ needs.prepare.outputs.version }}"
 
           gh release create "$TAG" \
             --title "Hakobu $TAG" \
-            --generate-notes \
+            --notes-file /tmp/changelog.md \
             --verify-tag \
             || gh release create "$TAG" \
               --title "Hakobu $TAG" \
-              --generate-notes
+              --notes-file /tmp/changelog.md
 
   # ────────────────────────────────────────────────────────────
   # Dry run summary

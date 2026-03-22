@@ -412,10 +412,14 @@
     - _Depends on: 13.3_
     - **Output:** publish dry-run steps in `rc-gate` job in `.github/workflows/ci.yml`
 
-  - [ ] 20.3 Add changelog generation
-    - Generate changelogs from conventional commit messages between tags
-    - Include changelog in GitHub Releases and/or a CHANGELOG.md file
+  - [x] 20.3 Add changelog generation
+    - Added `scripts/generate-changelog.js`: reads git log between tags,
+      parses conventional commit format, groups by type (feat/fix/docs/ci/etc.)
+    - Integrated into `release.yml`: generates changelog before GitHub Release
+      creation, uses `--notes-file` instead of `--generate-notes`
+    - Zero external dependencies — uses git log + Node string parsing
     - _Depends on: 13.3_
+    - **Output:** `scripts/generate-changelog.js`, updated `release.yml`
 
 - [ ] 21. Cache and fetch robustness
   - [ ] 21.1 Add integrity verification on cached base binaries
