@@ -1,0 +1,9 @@
+{
+  "name": "fixture-npm-dep",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "picocolors": "*",
+    "minimist": "*"
+  }
+}

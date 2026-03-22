@@ -451,11 +451,15 @@
     - **Output:** offline gate in `packages/hakobu-fetch/lib/index.ts`, docs update
 
 - [ ] 22. Broader real-world fixture coverage
-  - [ ] 22.1 Add a real npm-dependency fixture
-    - Package a project that depends on a real npm package (e.g., `chalk`,
-      `commander`, or `dotenv`) with node_modules resolved from disk
-    - Verify the packaged executable runs correctly with the dependency
+  - [x] 22.1 Add a real npm-dependency fixture
+    - Added `fixtures/npm-dependency/` with picocolors + minimist from npm
+    - Verifies: module loaded, functions work, arg parsing correct,
+      require.resolve works for npm packages
+    - Fixed directory tree in manifestToRecords: intermediate dirs (like
+      `node_modules/`) now get STORE_LINKS entries so CJS resolution works
+    - 27/27 fixture matrix passes (up from 25)
     - _Depends on: 12.1_
+    - **Output:** `fixtures/npm-dependency/`, directory tree fix in `packager.ts`
 
   - [ ] 22.2 Add a native addon fixture with a real compiled .node file
     - Package a project using a real compiled addon (e.g., `better-sqlite3`

@@ -12,7 +12,7 @@ hakobu/
 ├── patches/node/24.x/     # Node source patches (future)
 ├── fixtures/              # executable test fixtures (future)
 ├── .kiro/specs/hakobu/    # spec-driven development docs
-└── .github/workflows/     # CI/CD (future)
+└── .github/workflows/     # CI/CD
 ```
 
 ## Tooling

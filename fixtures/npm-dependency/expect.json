@@ -1,0 +1,13 @@
+{
+  "format": "npm-dependency",
+  "pc_loaded": true,
+  "pc_green": true,
+  "pc_bold": true,
+  "minimist_loaded": true,
+  "minimist_name": "hakobu",
+  "minimist_v": true,
+  "minimist_count": 42,
+  "minimist_positional": "extra",
+  "resolve_picocolors": true,
+  "resolve_minimist": true
+}

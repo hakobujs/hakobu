@@ -652,9 +652,26 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
 
     records[absPath] = record;
 
-    const dir = path.dirname(absPath);
+    // Build the full directory tree — not just direct parents, but all
+    // intermediate dirs up to the project root. This is needed for CJS
+    // node_modules resolution: require('pkg') walks up directories
+    // checking node_modules/pkg, so the VFS must have directory entries
+    // at every level.
+    let dir = path.dirname(absPath);
     if (!dirContents.has(dir)) dirContents.set(dir, []);
     dirContents.get(dir)!.push(path.basename(absPath));
+
+    // Walk up and register intermediate directories as children of their parents
+    const projectRoot = fs.realpathSync(manifest.projectRoot || path.dirname(manifest.entry.absolutePath));
+    while (dir !== projectRoot && dir !== path.dirname(dir)) {
+      const parent = path.dirname(dir);
+      if (!dirContents.has(parent)) dirContents.set(parent, []);
+      const dirBasename = path.basename(dir);
+      if (!dirContents.get(parent)!.includes(dirBasename)) {
+        dirContents.get(parent)!.push(dirBasename);
+      }
+      dir = parent;
+    }
   }
 
   // For ESM entries, inject a CJS shim + hook source into the VFS
