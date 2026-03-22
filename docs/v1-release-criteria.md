@@ -106,6 +106,7 @@ These CI jobs must all be green on the release candidate commit.
 | Gate | What it validates | Status |
 |---|---|---|
 | Windows Playwright/Camoufox | Packaged .exe launches Camoufox browser via direct pipe on Windows | Passed — manual VMware Fusion validation, 2026-03-21 |
+| Linux external validation | Packaged Linux executable installs and runs the external Camoufox example | Passed — manual validation, 2026-03-21 |
 
 ## 4. v1 release gate: executable proof
 
@@ -123,7 +124,7 @@ Every release candidate must demonstrate:
    target. Zero drift.
 
 3. **All 12 fixtures pass packaged on Windows x64** — the primary desktop
-   target. Zero drift. **Not yet running.**
+   target. Zero drift.
 
 4. **Zero semantic drift** — the comparison harness (`fixtures/run.js`) must
    report no drift between node and packaged output for any fixture on any
@@ -139,9 +140,10 @@ on each Tier 1 platform. The current validation target is
 - Launches a Playwright-controlled Camoufox browser
 - Completes a 4-site benchmark with browser automation
 
-This validation has been completed on macOS arm64. It must also pass on:
-- [ ] Linux x64
-- [ ] Windows x64 (Task 8.4 — requires `juggler-pipe` stdio validation)
+This validation has been completed on all Tier 1 targets:
+- [x] macOS arm64
+- [x] Linux x64
+- [x] Windows x64
 
 ### Windows Playwright/Camoufox gate (Task 8.4)
 
@@ -152,8 +154,8 @@ The Windows gate requires:
 3. The Playwright WebSocket/pipe handshake completes
 4. At least one page navigation succeeds
 
-This gate is **explicitly required for v1** even though it is not yet
-implemented. v1 cannot ship without it.
+This gate is **explicitly required for v1** and has now passed in manual
+VMware validation. v1 is no longer blocked on Windows runtime proof.
 
 ## 5. Documentation gates
 
@@ -198,10 +200,12 @@ When all criteria above are met, the release proceeds as follows:
 5. [x] Zero semantic drift on all three platforms
 6. [x] Config normalization tests pass (16/16)
 7. [x] External validation (camoufox-ts/example) passes on macOS
-8. [x] All docs listed in Section 5 are current
-9. [ ] Package versions set to `1.0.0` in both package.json files
-10. [ ] Tag `v1.0.0` and push
-11. [ ] `release.yml` workflow completes: npm publish + GitHub Release
+8. [x] External validation (camoufox-ts/example) passes on Linux
+9. [x] External validation (camoufox-ts/example) passes on Windows
+10. [x] All docs listed in Section 5 are current
+11. [ ] Package versions set to `1.0.0` in both package.json files
+12. [ ] Tag `v1.0.0` and push
+13. [ ] `release.yml` workflow completes: npm publish + GitHub Release
 
 ## Current v1 readiness
 
@@ -213,6 +217,7 @@ When all criteria above are met, the release proceeds as follows:
 | Windows Playwright/Camoufox gate | Done — manual VMware validation passed |
 | Config tests | Done (16/16) |
 | External validation (macOS) | Done (camoufox-ts/example, 4/4 benchmarks) |
+| External validation (Linux) | Done (camoufox-example-linux-x64 setup + benchmark) |
 | External validation (Windows) | Done (camoufox-example.exe, benchmark --headless passed) |
 | Documentation | Done (10 docs) |
 | Release workflow | Done (macOS + Windows fixture gates) |
