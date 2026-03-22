@@ -237,6 +237,70 @@ try {
   failed += 2;
 }
 
+// ── Test 6: --app-bundle with .icns icon ──
+
+// Create a minimal .icns test file
+const testIconPath = path.join(projectDir, 'app-icon.icns');
+const icnsBuf = Buffer.alloc(8);
+icnsBuf.write('icns', 0, 4, 'ascii');
+icnsBuf.writeUInt32BE(8, 4);
+fs.writeFileSync(testIconPath, icnsBuf);
+
+const appIcon = path.join(projectDir, 'IconApp.app');
+try {
+  execFileSync(process.execPath, [
+    HAKOBU_BIN, projectDir, '--app-bundle', '--output', appIcon,
+    '--macos-icon', testIconPath,
+  ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+  test('Icon: .icns copied to Contents/Resources/', () => {
+    const iconDest = path.join(appIcon, 'Contents', 'Resources', 'app-icon.icns');
+    if (!fs.existsSync(iconDest)) throw new Error('Icon not found in Resources/');
+    const content = fs.readFileSync(iconDest);
+    if (content.toString('ascii', 0, 4) !== 'icns') throw new Error('Icon file corrupted');
+  });
+
+  test('Icon: CFBundleIconFile in Info.plist', () => {
+    const plist = fs.readFileSync(path.join(appIcon, 'Contents', 'Info.plist'), 'utf8');
+    if (!plist.includes('CFBundleIconFile')) throw new Error('Missing CFBundleIconFile key');
+    if (!plist.includes('app-icon.icns')) throw new Error('Icon filename not in plist');
+  });
+
+} catch (err) {
+  if (!err.message?.includes('Icon') && !err.message?.includes('CFBundle')) {
+    const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+    console.log(`  XX  Icon bundle packaging — ${msg}`);
+    failed += 2;
+  }
+}
+
+// ── Test 7: no icon leaves plist without CFBundleIconFile ──
+
+test('No icon: CFBundleIconFile absent when no icon configured', () => {
+  const plist = fs.readFileSync(path.join(appOut, 'Contents', 'Info.plist'), 'utf8');
+  if (plist.includes('CFBundleIconFile'))
+    throw new Error('CFBundleIconFile should not be in plist without icon');
+});
+
+// ── Test 8: non-.icns file is rejected ──
+
+const fakePng = path.join(projectDir, 'fake.png');
+fs.writeFileSync(fakePng, 'not an icon');
+
+test('Icon validation: non-.icns rejected', () => {
+  try {
+    execFileSync(process.execPath, [
+      HAKOBU_BIN, projectDir, '--app-bundle', '--output', path.join(projectDir, 'Bad.app'),
+      '--macos-icon', fakePng,
+    ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    throw new Error('Should have failed');
+  } catch (err) {
+    const combined = (err.stderr || '') + (err.stdout || '') + (err.message || '');
+    if (!combined.includes('.icns'))
+      throw new Error('Expected .icns validation error, got: ' + combined.slice(0, 100));
+  }
+});
+
 // ── Cleanup ──
 try { fs.rmSync(projectDir, { recursive: true, force: true }); } catch {}
 

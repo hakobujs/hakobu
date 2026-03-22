@@ -574,15 +574,20 @@
     - **Output:** `app-bundle.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-app-bundle.js`
 
-  - [ ] 24.3 Support `.icns` application icon in bundles
-    - Accept a `.icns` file path via config (`metadata.macosIcon`) or
-      CLI (`--macos-icon`)
-    - Place it at `.app/Contents/Resources/<name>.icns` and reference
-      it as `CFBundleIconFile` in `Info.plist`
-    - Do not convert PNG→ICNS automatically (document the requirement
-      and point to `iconutil` / `sips` / ImageMagick)
+  - [x] 24.3 Support `.icns` application icon in bundles
+    - Added `icon` field to `MacosBundleMetadata` and `hakobu.macos`
+      config shape
+    - CLI flag: `--macos-icon <path>` (overrides config)
+    - When configured: copies `.icns` to `Contents/Resources/` and
+      adds `CFBundleIconFile` to `Info.plist`
+    - Validates input: rejects non-`.icns` files with clear error
+      pointing to `iconutil` for conversion
+    - When no icon configured: bundle is valid, no `CFBundleIconFile`
+    - 20/20 verification tests pass (4 new: icon placement, plist
+      reference, no-icon plist clean, non-.icns rejection)
     - _Depends on: 24.2_
-    - **Output:** icon placement in bundle, `Info.plist` icon reference
+    - **Output:** `app-bundle.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-app-bundle.js`
 
   - [ ] 24.4 Integrate signing and notarization with `.app` bundles
     - When `--sign-identity` is set and output is a `.app` bundle,

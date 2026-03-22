@@ -46,6 +46,7 @@ macOS bundle metadata (used with --app-bundle):
   --short-version <v>   CFBundleShortVersionString (defaults to bundle-version)
   --display-name <n>    CFBundleDisplayName
   --copyright <s>       NSHumanReadableCopyright
+  --macos-icon <path>   Path to .icns file for the app icon
                         Also configurable via "hakobu.macos" in package.json
 
 Signing:
@@ -113,7 +114,8 @@ async function main() {
              'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password',
              'product-name', 'file-description', 'company-name', 'file-version',
              'product-version', 'icon',
-             'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright'],
+             'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright',
+             'macos-icon'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize', 'app-bundle'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
@@ -197,6 +199,7 @@ async function main() {
       if (argv['short-version']) cliMacos.shortVersion = argv['short-version'];
       if (argv['display-name']) cliMacos.displayName = argv['display-name'];
       if (argv.copyright) cliMacos.copyright = argv.copyright;
+      if (argv['macos-icon']) cliMacos.icon = argv['macos-icon'];
       if (Object.keys(cliMacos).length > 0) {
         options.macos = { ...options.macos, ...cliMacos };
       }

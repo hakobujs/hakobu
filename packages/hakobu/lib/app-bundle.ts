@@ -65,6 +65,14 @@ export interface MacosBundleMetadata {
    * Example: 'Copyright 2026 ACME Corporation'
    */
   copyright?: string;
+
+  /**
+   * Path to a .icns file to embed as the application icon.
+   * Must be a valid macOS .icns file (not PNG/SVG/JPEG).
+   * The file is copied to Contents/Resources/ and referenced
+   * as CFBundleIconFile in Info.plist.
+   */
+  icon?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -99,6 +107,7 @@ function generatePlist(
   executableName: string,
   appName: string,
   meta?: MacosBundleMetadata,
+  iconFileName?: string,
 ): string {
   const entries: string[] = [];
 
@@ -124,6 +133,10 @@ function generatePlist(
 
   if (meta?.copyright) {
     entries.push(plistEntry('NSHumanReadableCopyright', meta.copyright));
+  }
+
+  if (iconFileName) {
+    entries.push(plistEntry('CFBundleIconFile', iconFileName));
   }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -194,8 +207,26 @@ export function createAppBundle(opts: AppBundleOptions): string {
   const bundledExec = path.join(macosDir, execName);
   fs.renameSync(executablePath, bundledExec);
 
+  // Copy .icns icon if configured
+  let iconFileName: string | undefined;
+  const iconPath = opts.macos?.icon;
+  if (iconPath) {
+    if (!fs.existsSync(iconPath)) {
+      throw new Error(`macOS icon file not found: ${iconPath}`);
+    }
+    if (!iconPath.endsWith('.icns')) {
+      throw new Error(
+        `macOS icon must be a .icns file (got ${path.extname(iconPath) || 'no extension'}).\n` +
+        'Convert your icon to .icns using: iconutil -c icns <iconset>'
+      );
+    }
+    iconFileName = path.basename(iconPath);
+    fs.copyFileSync(iconPath, path.join(resourcesDir, iconFileName));
+    log.info(`  icon: ${iconFileName}`);
+  }
+
   // Write Info.plist
-  const plist = generatePlist(execName, appName, opts.macos);
+  const plist = generatePlist(execName, appName, opts.macos, iconFileName);
   fs.writeFileSync(path.join(contentsDir, 'Info.plist'), plist, 'utf8');
 
   log.info(`Created macOS app bundle: ${appPath}`);

@@ -84,6 +84,8 @@ export interface HakobuConfig {
     bundleVersion?: string;
     shortVersion?: string;
     copyright?: string;
+    /** Path to a .icns file to embed as the application icon. */
+    icon?: string;
   };
 }
 
