@@ -422,11 +422,14 @@
     - **Output:** `scripts/generate-changelog.js`, updated `release.yml`
 
 - [ ] 21. Cache and fetch robustness
-  - [ ] 21.1 Add integrity verification on cached base binaries
-    - Verify SHA-256 of cached binaries before use, not just after download
-    - Detect and re-fetch corrupted cache entries instead of producing
-      broken executables
+  - [x] 21.1 Add integrity verification on cached base binaries
+    - Fetched binaries: SHA-256 verified against expected-shas.json before use
+    - Built binaries: size check rejects files <1MB as corrupted (valid Node >30MB)
+    - On mismatch/corruption: cached file is deleted, falls through to re-fetch
+      or rebuild
+    - HAKOBU_NODE_PATH: still trusted without hash check (user-provided)
     - _Depends on: 3.3_
+    - **Output:** `packages/hakobu-fetch/lib/index.ts` (cache verification in `need()`)
 
   - [ ] 21.2 Add parallel base binary fetching for multi-target builds
     - Fetch base binaries concurrently when `packageMultiple()` targets

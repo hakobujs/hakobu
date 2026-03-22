@@ -146,17 +146,22 @@ export async function need(opts: NeedOptions) {
     );
   }
 
+  // ── Check cached fetched binary ──
   if (!forceBuild && expectedHash) {
     if (await exists(fetched)) {
       if (dryRun) {
         return 'exists';
       }
 
-      // when node path is set, skip hash check
-      if (
-        !!process.env.HAKOBU_NODE_PATH ||
-        (await hash(fetched)) === expectedHash
-      ) {
+      // Verify cached binary integrity before use
+      if (process.env.HAKOBU_NODE_PATH) {
+        // User-provided path — trust without hash check
+        await signIfNeeded(fetched);
+        return fetched;
+      }
+
+      const cachedHash = await hash(fetched);
+      if (cachedHash === expectedHash) {
         await signIfNeeded(fetched);
         return fetched;
       }
@@ -166,12 +171,22 @@ export async function need(opts: NeedOptions) {
     }
   }
 
+  // ── Check cached built binary ──
   if (!forceFetch) {
     if (await exists(built)) {
       if (dryRun) return 'exists';
-      if (forceBuild) log.info('Reusing base binaries built locally:', built);
 
-      return built;
+      // Verify built binary is not corrupted (valid Node binaries are >30MB)
+      const builtStat = await stat(built);
+      if (builtStat.size < 1024 * 1024) {
+        log.info(
+          `Built binary appears corrupted (${builtStat.size} bytes). Removing...`
+        );
+        unlinkSync(built);
+      } else {
+        if (forceBuild) log.info('Reusing base binaries built locally:', built);
+        return built;
+      }
     }
   }
 
