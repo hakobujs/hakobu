@@ -73,6 +73,18 @@ export interface HakobuConfig {
    * Only valid for macOS targets.
    */
   appBundle?: boolean;
+
+  /**
+   * macOS bundle metadata for Info.plist generation.
+   * Only used when appBundle is true.
+   */
+  macos?: {
+    bundleId?: string;
+    displayName?: string;
+    bundleVersion?: string;
+    shortVersion?: string;
+    copyright?: string;
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -285,6 +297,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       bytecode: bytecode || undefined,
       metadata,
       appBundle: hakobuConfig?.appBundle,
+      macos: hakobuConfig?.macos,
     },
     warnings,
   };

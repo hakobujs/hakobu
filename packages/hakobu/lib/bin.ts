@@ -40,6 +40,14 @@ Advanced:
   --app-bundle        Wrap macOS output in a .app bundle (macOS only)
                       Output path becomes the .app directory
 
+macOS bundle metadata (used with --app-bundle):
+  --bundle-id <id>      CFBundleIdentifier (e.g., com.example.my-app)
+  --bundle-version <v>  CFBundleVersion (e.g., 1.2.3)
+  --short-version <v>   CFBundleShortVersionString (defaults to bundle-version)
+  --display-name <n>    CFBundleDisplayName
+  --copyright <s>       NSHumanReadableCopyright
+                        Also configurable via "hakobu.macos" in package.json
+
 Signing:
   --sign-identity <id>  macOS code-signing identity (default: ad-hoc)
                         Also: HAKOBU_SIGN_IDENTITY env var
@@ -104,7 +112,8 @@ async function main() {
              'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
              'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password',
              'product-name', 'file-description', 'company-name', 'file-version',
-             'product-version', 'icon'],
+             'product-version', 'icon',
+             'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright'],
     boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build', 'notarize', 'app-bundle'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
@@ -181,6 +190,17 @@ async function main() {
       // App bundle
       if (argv['app-bundle']) options.appBundle = true;
 
+      // macOS bundle metadata — CLI flags override config
+      const cliMacos: Record<string, string> = {};
+      if (argv['bundle-id']) cliMacos.bundleId = argv['bundle-id'];
+      if (argv['bundle-version']) cliMacos.bundleVersion = argv['bundle-version'];
+      if (argv['short-version']) cliMacos.shortVersion = argv['short-version'];
+      if (argv['display-name']) cliMacos.displayName = argv['display-name'];
+      if (argv.copyright) cliMacos.copyright = argv.copyright;
+      if (Object.keys(cliMacos).length > 0) {
+        options.macos = { ...options.macos, ...cliMacos };
+      }
+
       // PE metadata — CLI flags override config
       const cliMeta: Record<string, string> = {};
       if (argv['product-name']) cliMeta.productName = argv['product-name'];
@@ -209,6 +229,7 @@ async function main() {
           winCertPassword: options.winCertPassword,
           metadata: options.metadata,
           appBundle: options.appBundle,
+          macos: options.macos,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

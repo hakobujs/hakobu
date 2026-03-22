@@ -138,7 +138,77 @@ try {
   failed++;
 }
 
-// ── Test 3: default output (no --app-bundle) is still raw executable ──
+// ── Test 3: --app-bundle with metadata CLI flags ──
+
+const appMeta = path.join(projectDir, 'MetaApp.app');
+try {
+  execFileSync(process.execPath, [
+    HAKOBU_BIN, projectDir, '--app-bundle', '--output', appMeta,
+    '--bundle-id', 'com.acme.test-app',
+    '--bundle-version', '2.5.1',
+    '--short-version', '2.5',
+    '--display-name', 'ACME Test App',
+    '--copyright', 'Copyright 2026 ACME Corp',
+  ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+  const plistContent = fs.readFileSync(
+    path.join(appMeta, 'Contents', 'Info.plist'), 'utf8'
+  );
+
+  test('Metadata: CFBundleIdentifier set', () => {
+    if (!plistContent.includes('com.acme.test-app'))
+      throw new Error('CFBundleIdentifier not found');
+  });
+
+  test('Metadata: CFBundleVersion set', () => {
+    if (!plistContent.includes('<key>CFBundleVersion</key>'))
+      throw new Error('Missing CFBundleVersion key');
+    if (!plistContent.includes('2.5.1'))
+      throw new Error('CFBundleVersion value not found');
+  });
+
+  test('Metadata: CFBundleShortVersionString set', () => {
+    if (!plistContent.includes('<key>CFBundleShortVersionString</key>'))
+      throw new Error('Missing CFBundleShortVersionString key');
+    // Short version is '2.5'
+    if (!plistContent.includes('>2.5<'))
+      throw new Error('CFBundleShortVersionString value not found');
+  });
+
+  test('Metadata: CFBundleDisplayName set', () => {
+    if (!plistContent.includes('ACME Test App'))
+      throw new Error('CFBundleDisplayName not found');
+  });
+
+  test('Metadata: NSHumanReadableCopyright set', () => {
+    if (!plistContent.includes('Copyright 2026 ACME Corp'))
+      throw new Error('NSHumanReadableCopyright not found');
+  });
+
+} catch (err) {
+  if (!err.message?.includes('CFBundle') && !err.message?.includes('Copyright')) {
+    const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+    console.log(`  XX  Metadata bundle packaging — ${msg}`);
+    failed += 5;
+  }
+}
+
+// ── Test 4: defaults when no metadata is specified ──
+
+test('Defaults: CFBundleIdentifier derived from app name', () => {
+  // The first test (appOut) had no metadata — check its plist
+  const plist = fs.readFileSync(path.join(appOut, 'Contents', 'Info.plist'), 'utf8');
+  if (!plist.includes('CFBundleIdentifier')) throw new Error('No CFBundleIdentifier');
+  if (!plist.includes('com.hakobu.')) throw new Error('Default bundle ID not derived');
+});
+
+test('Defaults: CFBundleVersion has default value', () => {
+  const plist = fs.readFileSync(path.join(appOut, 'Contents', 'Info.plist'), 'utf8');
+  if (!plist.includes('<key>CFBundleVersion</key>'))
+    throw new Error('No default CFBundleVersion');
+});
+
+// ── Test 5: default output (no --app-bundle) is still raw executable ──
 
 const rawOut = path.join(projectDir, 'raw-test');
 try {

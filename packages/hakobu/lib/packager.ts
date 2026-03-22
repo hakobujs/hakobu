@@ -39,6 +39,7 @@ import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-s
 import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
 import { createAppBundle } from './app-bundle';
+import type { MacosBundleMetadata } from './app-bundle';
 
 // ─────────────────────────────────────────────────────────────────────
 // Package options
@@ -120,6 +121,9 @@ export interface PackageOptions {
    * directory (e.g., dist/MyApp.app/).
    */
   appBundle?: boolean;
+
+  /** macOS bundle metadata for Info.plist generation. */
+  macos?: MacosBundleMetadata;
 }
 
 export interface PackageResult {
@@ -188,6 +192,7 @@ export interface PackageMultipleOptions {
   winCertPassword?: string;
   metadata?: ExeMetadata;
   appBundle?: boolean;
+  macos?: MacosBundleMetadata;
 }
 
 export interface PackageMultipleResult {
@@ -468,6 +473,7 @@ async function packageAppForTarget(
         executablePath: target.output,
         outputPath: outputPath,
         appName: manifest.appId,
+        macos: options.macos,
       });
     }
 
@@ -736,6 +742,7 @@ async function packageAppInner(
         executablePath: target.output,
         outputPath: requestedOutput,
         appName: manifest.appId,
+        macos: options.macos,
       });
     }
 

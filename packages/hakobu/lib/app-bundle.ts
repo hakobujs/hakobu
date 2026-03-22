@@ -5,10 +5,10 @@
  *
  *   MyApp.app/
  *   └── Contents/
- *       ├── Info.plist   (minimal — expanded in Task 24.2)
+ *       ├── Info.plist
  *       ├── MacOS/
  *       │   └── <binary>
- *       └── Resources/   (empty — icons added in Task 24.3)
+ *       └── Resources/   (icons added in Task 24.3)
  *
  * The .app bundle is the standard macOS application format. It allows
  * the executable to appear as a native application in Finder, Dock,
@@ -21,36 +21,124 @@ import path from 'path';
 
 import { log } from './log';
 
+// ─────────────────────────────────────────────────────────────────────
+// Metadata types
+// ─────────────────────────────────────────────────────────────────────
+
 /**
- * Generate a minimal Info.plist for a macOS .app bundle.
+ * macOS bundle metadata for Info.plist generation.
  *
- * This produces the minimum required keys for a valid bundle.
- * Full metadata support (CFBundleIdentifier, version, display name,
- * copyright) is added in Task 24.2.
+ * All fields are optional — sensible defaults are derived from the
+ * app name and package.json version when available.
  */
-function generateMinimalPlist(executableName: string, appName: string): string {
-  // XML-escape the values
-  const esc = (s: string) => s
+export interface MacosBundleMetadata {
+  /**
+   * CFBundleIdentifier — reverse-DNS bundle identifier.
+   * Example: 'com.example.my-app'
+   * Default: derived from app name as 'com.hakobu.<appName>'
+   */
+  bundleId?: string;
+
+  /**
+   * CFBundleDisplayName — user-visible name (can differ from CFBundleName).
+   * Example: 'My Application'
+   * Default: same as CFBundleName (appName)
+   */
+  displayName?: string;
+
+  /**
+   * CFBundleVersion — build version string (e.g., '42' or '1.2.3').
+   * This is the internal version used by macOS for update comparisons.
+   * Default: '1.0.0'
+   */
+  bundleVersion?: string;
+
+  /**
+   * CFBundleShortVersionString — user-visible version string.
+   * Example: '1.2.3'
+   * Default: same as bundleVersion
+   */
+  shortVersion?: string;
+
+  /**
+   * NSHumanReadableCopyright — copyright string shown in Get Info.
+   * Example: 'Copyright 2026 ACME Corporation'
+   */
+  copyright?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Info.plist generation
+// ─────────────────────────────────────────────────────────────────────
+
+function esc(s: string): string {
+  return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+}
+
+function plistEntry(key: string, value: string): string {
+  return `  <key>${esc(key)}</key>\n  <string>${esc(value)}</string>`;
+}
+
+/**
+ * Derive a reverse-DNS bundle identifier from an app name.
+ * Strips @scope/ prefixes and replaces non-alphanumeric chars with hyphens.
+ */
+function deriveBundleId(appName: string): string {
+  const clean = appName
+    .replace(/^@[^/]+\//, '') // strip npm scope
+    .replace(/[^a-zA-Z0-9.-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `com.hakobu.${clean || 'app'}`;
+}
+
+function generatePlist(
+  executableName: string,
+  appName: string,
+  meta?: MacosBundleMetadata,
+): string {
+  const entries: string[] = [];
+
+  // Required keys
+  entries.push(plistEntry('CFBundleExecutable', executableName));
+  entries.push(plistEntry('CFBundleName', appName));
+  entries.push(plistEntry('CFBundlePackageType', 'APPL'));
+  entries.push(plistEntry('CFBundleInfoDictionaryVersion', '6.0'));
+
+  // Metadata keys (with defaults)
+  const bundleId = meta?.bundleId || deriveBundleId(appName);
+  entries.push(plistEntry('CFBundleIdentifier', bundleId));
+
+  const bundleVersion = meta?.bundleVersion || '1.0.0';
+  entries.push(plistEntry('CFBundleVersion', bundleVersion));
+
+  const shortVersion = meta?.shortVersion || bundleVersion;
+  entries.push(plistEntry('CFBundleShortVersionString', shortVersion));
+
+  if (meta?.displayName) {
+    entries.push(plistEntry('CFBundleDisplayName', meta.displayName));
+  }
+
+  if (meta?.copyright) {
+    entries.push(plistEntry('NSHumanReadableCopyright', meta.copyright));
+  }
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleExecutable</key>
-  <string>${esc(executableName)}</string>
-  <key>CFBundleName</key>
-  <string>${esc(appName)}</string>
-  <key>CFBundlePackageType</key>
-  <string>APPL</string>
-  <key>CFBundleInfoDictionaryVersion</key>
-  <string>6.0</string>
+${entries.join('\n')}
 </dict>
 </plist>
 `;
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Bundle creation
+// ─────────────────────────────────────────────────────────────────────
 
 export interface AppBundleOptions {
   /** Path to the packaged Mach-O executable (already signed). */
@@ -67,6 +155,9 @@ export interface AppBundleOptions {
    * Defaults to the executable filename without extension.
    */
   appName?: string;
+
+  /** macOS bundle metadata for Info.plist. */
+  macos?: MacosBundleMetadata;
 }
 
 /**
@@ -103,8 +194,8 @@ export function createAppBundle(opts: AppBundleOptions): string {
   const bundledExec = path.join(macosDir, execName);
   fs.renameSync(executablePath, bundledExec);
 
-  // Write minimal Info.plist
-  const plist = generateMinimalPlist(execName, appName);
+  // Write Info.plist
+  const plist = generatePlist(execName, appName, opts.macos);
   fs.writeFileSync(path.join(contentsDir, 'Info.plist'), plist, 'utf8');
 
   log.info(`Created macOS app bundle: ${appPath}`);

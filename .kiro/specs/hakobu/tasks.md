@@ -556,17 +556,23 @@
     - **Output:** `app-bundle.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-app-bundle.js`
 
-  - [ ] 24.2 Generate `Info.plist` with app metadata
-    - Produce a well-formed `Info.plist` from config / CLI metadata fields:
-      CFBundleName, CFBundleDisplayName, CFBundleIdentifier,
-      CFBundleVersion, CFBundleShortVersionString, NSHumanReadableCopyright
-    - Read from `"hakobu": { "macos": { ... } }` in package.json
-    - Sensible defaults: derive bundle ID from package name (e.g.,
-      `com.example.my-app`), version from package.json version
-    - CLI overrides: `--bundle-id`, `--bundle-name` (reuse existing
-      `--product-name`, `--file-version` where they map cleanly)
+  - [x] 24.2 Generate `Info.plist` with app metadata
+    - Expanded `generatePlist()` in `app-bundle.ts` to emit:
+      CFBundleIdentifier, CFBundleVersion, CFBundleShortVersionString,
+      CFBundleDisplayName, NSHumanReadableCopyright (in addition to
+      the required CFBundleExecutable, CFBundleName, CFBundlePackageType)
+    - Config via `"hakobu": { "macos": { bundleId, bundleVersion,
+      shortVersion, displayName, copyright } }` in package.json
+    - CLI overrides: `--bundle-id`, `--bundle-version`, `--short-version`,
+      `--display-name`, `--copyright`
+    - Sensible defaults when metadata is omitted: CFBundleIdentifier
+      derived as `com.hakobu.<appName>`, CFBundleVersion defaults to
+      `1.0.0`, CFBundleShortVersionString defaults to bundleVersion
+    - Minimal bundle (no metadata) still works with valid defaults
+    - 16/16 verification tests pass (5 new metadata, 2 new defaults)
     - _Depends on: 24.1_
-    - **Output:** `Info.plist` generator, config/CLI plumbing, docs
+    - **Output:** `app-bundle.ts`, `packager.ts`, `bin.ts`, `config.ts`,
+      `fixtures/test-app-bundle.js`
 
   - [ ] 24.3 Support `.icns` application icon in bundles
     - Accept a `.icns` file path via config (`metadata.macosIcon`) or
