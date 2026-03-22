@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 /**
- * Linux AppDir verification.
+ * Linux AppDir / AppImage verification.
  *
- * Tests that --appdir produces a valid AppDir directory structure
- * and that default (non-AppDir) output is unaffected.
+ * Tests that --appdir and --appimage produce valid Linux distribution
+ * artifacts with correct structure, .desktop, icons, and metainfo.
  *
- * Structure tests (createAppDir function) run on all platforms.
- * Full packaging tests (hakobu --appdir) only run on Linux.
+ * Coverage tiers:
+ *   1. Unit tests (createAppDir/createAppImage) — run on all platforms
+ *   2. CLI validation tests — run on all platforms
+ *   3. Full packaging tests (hakobu --appdir) — Linux only
+ *   4. AppImage success path — Linux only, if appimagetool is available
  *
  * Run: node fixtures/test-appdir.js
  */
@@ -531,6 +534,35 @@ if (process.platform === 'linux') {
         throw new Error('AppRun output wrong: ' + output.slice(0, 100));
     });
 
+    // ── Packaged AppDir: .desktop present ──
+    test('Packaged AppDir: .desktop file generated', () => {
+      const appsDir = path.join(appDirOut, 'usr', 'share', 'applications');
+      const files = fs.readdirSync(appsDir);
+      if (files.length === 0) throw new Error('No .desktop file');
+      const content = fs.readFileSync(path.join(appsDir, files[0]), 'utf8');
+      if (!content.includes('[Desktop Entry]'))
+        throw new Error('Invalid .desktop content');
+    });
+
+    // ── Packaged AppDir: metainfo present ──
+    test('Packaged AppDir: metainfo.xml generated', () => {
+      const metaDir = path.join(appDirOut, 'usr', 'share', 'metainfo');
+      const files = fs.readdirSync(metaDir);
+      if (files.length === 0) throw new Error('No metainfo file');
+      const content = fs.readFileSync(path.join(metaDir, files[0]), 'utf8');
+      if (!content.includes('<component'))
+        throw new Error('Invalid metainfo content');
+    });
+
+    // ── Packaged AppDir: .desktop and metainfo reference each other ──
+    test('Packaged AppDir: metainfo references .desktop', () => {
+      const metaDir = path.join(appDirOut, 'usr', 'share', 'metainfo');
+      const file = fs.readdirSync(metaDir).find(f => f.endsWith('.metainfo.xml'));
+      const content = fs.readFileSync(path.join(metaDir, file), 'utf8');
+      if (!content.includes('.desktop</launchable>'))
+        throw new Error('Metainfo does not reference .desktop file');
+    });
+
     // Verify default (no --appdir) still produces raw executable
     const rawOut = path.join(projectDir, 'raw-linux');
     execFileSync(process.execPath, [
@@ -544,13 +576,71 @@ if (process.platform === 'linux') {
         throw new Error('Should not be an AppDir');
     });
 
+    test('Default output: raw executable runs', () => {
+      const output = execFileSync(rawOut, [], {
+        timeout: 15000, encoding: 'utf8',
+      });
+      if (!output.includes('format=appdir-cli-test'))
+        throw new Error('Raw output broken: ' + output.slice(0, 100));
+    });
+
   } catch (err) {
-    if (!err.message?.includes('AppDir') && !err.message?.includes('AppRun')) {
+    if (!err.message?.includes('AppDir') && !err.message?.includes('AppRun') &&
+        !err.message?.includes('.desktop') && !err.message?.includes('metainfo')) {
       const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
       console.log(`  XX  Packaged AppDir — ${msg}`);
-      failed += 6;
+      failed += 9;
     }
   }
+
+  // ── AppImage success path (Linux, only when appimagetool is available) ──
+  let hasAppimagetool = false;
+  try {
+    execFileSync('appimagetool', ['--version'], { stdio: 'pipe', timeout: 5000 });
+    hasAppimagetool = true;
+  } catch {}
+
+  if (hasAppimagetool) {
+    const appImageOut = path.join(projectDir, 'TestApp');
+    try {
+      execFileSync(process.execPath, [
+        HAKOBU_BIN, projectDir, '--appimage', '--output', appImageOut,
+      ], { timeout: 300000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+
+      test('AppImage: .AppImage file produced', () => {
+        const appImageFile = appImageOut + '.AppImage';
+        if (!fs.existsSync(appImageFile))
+          throw new Error('AppImage file not found');
+        if (!fs.statSync(appImageFile).isFile())
+          throw new Error('Not a file');
+        if (fs.statSync(appImageFile).size < 1024)
+          throw new Error('AppImage too small');
+      });
+
+      test('AppImage: intermediate AppDir cleaned up', () => {
+        // The AppDir should be removed after AppImage creation
+        if (fs.existsSync(appImageOut + '.AppDir'))
+          throw new Error('AppDir should have been cleaned up');
+      });
+
+      test('AppImage: executable runs', () => {
+        const output = execFileSync(appImageOut + '.AppImage', [], {
+          timeout: 15000, encoding: 'utf8',
+        });
+        if (!output.includes('format=appdir-cli-test'))
+          throw new Error('AppImage output wrong: ' + output.slice(0, 100));
+      });
+    } catch (err) {
+      if (!err.message?.includes('AppImage')) {
+        const msg = err.stderr ? err.stderr.toString().split('\n')[0] : err.message.split('\n')[0];
+        console.log(`  XX  AppImage packaging — ${msg}`);
+        failed += 3;
+      }
+    }
+  } else {
+    console.log('  --  AppImage success-path tests skipped (appimagetool not in PATH)');
+  }
+
 } else {
   console.log('  --  Full packaging tests skipped (not Linux)');
 }

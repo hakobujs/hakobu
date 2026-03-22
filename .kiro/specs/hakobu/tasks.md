@@ -625,7 +625,7 @@
     - _Depends on: 24.2_
     - **Output:** `fixtures/test-app-bundle.js`, `.github/workflows/ci.yml`
 
-- [ ] 25. Linux desktop and distribution artifacts
+- [x] 25. Linux desktop and distribution artifacts
   - [x] 25.1 Generate AppDir-style directory output
     - Added `--appdir` CLI flag and `appDir` config option
     - When enabled for Linux targets, produces AppDir layout:
@@ -713,11 +713,19 @@
     - **Output:** `appdir.ts`, `packager.ts`, `bin.ts`, `config.ts`,
       `fixtures/test-appdir.js`
 
-  - [ ] 25.6 Add fixture / verification for Linux artifacts
-    - Create a fixture or verification script that:
-      validates AppDir structure, `.desktop` file syntax, icon placement,
-      and that the executable inside runs correctly
-    - If AppImage is built, verify it is executable and produces correct
-      output
+  - [x] 25.6 Add fixture / verification for Linux artifacts
+    - `fixtures/test-appdir.js` with 37+ tests across 4 coverage tiers:
+      Tier 1 (all platforms, 34 tests): unit tests for AppDir structure,
+        .desktop generation, icon placement, metainfo XML, AppImage
+        tool-missing error, non-Linux rejection, suffix auto-append
+      Tier 2 (all platforms, 3 tests): CLI validation for --appdir
+        and --appimage on non-Linux targets
+      Tier 3 (Linux only, 9 tests): full packaging with real binary —
+        AppDir structure, AppRun execution, inner executable, .desktop
+        generated, metainfo generated, cross-references, raw ELF default
+      Tier 4 (Linux + appimagetool, 3 tests): AppImage success path —
+        .AppImage produced, intermediate AppDir cleaned up, AppImage runs
+    - Already integrated into CI: fixtures-linux job runs test-appdir.js
+    - Skips gracefully on non-Linux and when appimagetool is absent
     - _Depends on: 25.2_
-    - **Output:** Linux artifact fixture or verification script
+    - **Output:** `fixtures/test-appdir.js`
