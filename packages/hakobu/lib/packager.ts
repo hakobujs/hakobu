@@ -66,6 +66,12 @@ export interface PackageOptions {
 
   /** Module names/patterns to keep external when bundling. */
   bundleExternal?: string[];
+
+  /**
+   * Bytecode compilation: compile JS to V8 bytecode before packaging.
+   * Opt-in. Default: false (source-only mode).
+   */
+  bytecode?: boolean;
 }
 
 export interface PackageResult {
@@ -345,6 +351,15 @@ function defaultOutputName(appId: string, target: { platform: string; arch: stri
 // ─────────────────────────────────────────────────────────────────────
 
 export async function packageApp(options: PackageOptions): Promise<PackageResult> {
+  // ── Bytecode mode gate ──
+  if (options.bytecode) {
+    throw new Error(
+      'Bytecode compilation (--bytecode) is not yet implemented.\n' +
+      'Hakobu currently packages source-only. Bytecode support is planned for a future release.\n' +
+      'Remove --bytecode or set hakobu.bytecode to false to package in source-only mode.'
+    );
+  }
+
   let { projectRoot } = options;
   let bundleOutput: BundleOutput | null = null;
 

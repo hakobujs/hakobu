@@ -35,6 +35,9 @@ Bundle mode (optional — for TypeScript / monorepo projects):
   --bundle [name]     Pre-bundle with Rolldown before packaging
   --external <mod>    Keep module external when bundling (repeatable)
 
+Advanced:
+  --bytecode          Compile JS to V8 bytecode before packaging (not yet implemented)
+
   Without --bundle, Hakobu packages JS files directly (native mode).
   With --bundle, Rolldown compiles TS and resolves dependencies first.
   See docs/bundle-mode.md for semantic differences and caveats.
@@ -76,7 +79,7 @@ async function main() {
     string: ['target', 'targets', 'output', 'entry', 'external', 'config',
              'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
              'options', 'no-dict'],
-    boolean: ['help', 'version', 'no-bytecode', 'build', 'public', 'sea',
+    boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
               'no-native-build'],
     alias: { h: 'help', v: 'version', o: 'output', t: 'target',
              c: 'config', b: 'build', d: 'debug', C: 'compress' },
@@ -115,6 +118,7 @@ async function main() {
         output: argv.output,
         bundle: argv.bundle,
         external: argv.external,
+        bytecode: argv.bytecode,
         // Legacy aliases
         targets: argv.targets,
         config: argv.config,

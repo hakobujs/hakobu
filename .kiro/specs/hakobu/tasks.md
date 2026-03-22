@@ -358,13 +358,15 @@
     - _Depends on: 3.3, 17.2_
     - **Output:** `packages/hakobu/lib/packager.ts` (setSourceMapsEnabled in ESM shim)
 
-  - [ ] 19.2 Add modern Hakobu config/CLI support for `bytecode: true`
-    - Define the modern config/API surface for enabling bytecode compilation
-      without reviving legacy `pkg` behavior blindly
-    - Keep source-only mode as the default and make bytecode explicitly opt-in
-    - Normalize any migration aliases carefully and document changed behavior
+  - [x] 19.2 Add modern Hakobu config/CLI support for `bytecode: true`
+    - Config: `hakobu.bytecode: true` in package.json
+    - CLI: `--bytecode` flag
+    - Source-only remains default; bytecode is explicitly opt-in
+    - Before 19.3: requesting bytecode fails with a clear "not yet implemented"
+      error and actionable guidance to remove the option
+    - Legacy `--no-bytecode` updated to reference new `--bytecode` flag
     - _Depends on: 10.3, 19.1_
-    - **Likely output:** updates to `packages/hakobu/lib/config.ts`, CLI/config docs
+    - **Output:** `packages/hakobu/lib/config.ts`, `packages/hakobu/lib/packager.ts`, `packages/hakobu/lib/bin.ts`
 
   - [ ] 19.3 Implement bytecode generation in the package pipeline
     - Re-enable or modernize the bytecode fabrication path for supported

@@ -44,6 +44,14 @@ export interface HakobuConfig {
 
   /** Modules to keep external when bundling. */
   bundleExternal?: string[];
+
+  /**
+   * Bytecode compilation: compile JS to V8 bytecode before packaging.
+   * Opt-in. Default: false (source-only mode).
+   * When true, scripts are compiled to bytecode for the target platform.
+   * Source maps are not available in bytecode mode.
+   */
+  bytecode?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -74,6 +82,7 @@ export interface CliArgs {
   output?: string;
   bundle?: boolean | string;
   external?: string | string[];
+  bytecode?: boolean;
   // Legacy CLI aliases
   targets?: string;
   config?: string;
@@ -236,6 +245,9 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
     bundleExternal = source.bundleExternal;
   }
 
+  // Bytecode mode — CLI --bytecode overrides config only when explicitly true
+  const bytecode = args.bytecode === true ? true : (source.bytecode ?? false);
+
   return {
     options: {
       projectRoot,
@@ -246,6 +258,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       externals,
       bundle,
       bundleExternal,
+      bytecode: bytecode || undefined,
     },
     warnings,
   };
@@ -348,7 +361,7 @@ function checkUnsupportedCliFlag(
 ): void {
   if (args[flag] !== undefined && args[flag] !== false) {
     const messages: Record<string, string> = {
-      'no-bytecode': '--no-bytecode is not needed. Hakobu always packages source (no bytecode).',
+      'no-bytecode': '--no-bytecode is not needed. Hakobu defaults to source-only mode. Use --bytecode to opt in to bytecode compilation.',
       'compress': '--compress is not supported. Hakobu does not compress the snapshot payload.',
       'public': '--public is not supported. Hakobu always includes source.',
       'public-packages': '--public-packages is not supported. Hakobu always includes source.',
