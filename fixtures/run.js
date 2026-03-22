@@ -171,15 +171,6 @@ for (const name of fixtures) {
     continue;
   }
 
-  // Bundle-mode fixtures on Windows are skipped — Rolldown's ESM-only
-  // dynamic import can fail on Windows CI depending on pnpm hoisting.
-  // These fixtures are validated on macOS and Linux.
-  if (isBundleOnly && process.platform === 'win32') {
-    console.log(`  --  ${name} (packaged) — skipped (bundle-mode on Windows CI)`);
-    totalSkip++;
-    continue;
-  }
-
   try {
     const pkgResult = runPackaged(dir, name);
     const mismatches = compare(pkgResult, expected);

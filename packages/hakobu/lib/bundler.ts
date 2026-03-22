@@ -458,13 +458,15 @@ let _rolldownCache: any = null;
 async function loadRolldown(): Promise<any> {
   if (_rolldownCache) return _rolldownCache;
 
-  // rolldown is ESM-only, so we need dynamic import
+  const { pathToFileURL } = require('url') as typeof import('url');
+  // rolldown is ESM-only, so we need dynamic import with a file:// URL
+  // (bare paths fail on Windows where import() expects URL format)
   const dynamicImport = new Function('specifier', 'return import(specifier)');
 
   // Try to find rolldown in the local node_modules first
-  const localPath = path.join(__dirname, '../node_modules/rolldown/dist/index.mjs');
+  const localPath = path.resolve(__dirname, '../node_modules/rolldown/dist/index.mjs');
   if (fs.existsSync(localPath)) {
-    _rolldownCache = await dynamicImport(localPath);
+    _rolldownCache = await dynamicImport(pathToFileURL(localPath).href);
     return _rolldownCache;
   }
 
