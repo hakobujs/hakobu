@@ -10,6 +10,7 @@
  */
 
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 
@@ -88,6 +89,34 @@ export interface PackageResult {
 
   /** Target that was built. */
   target: { platform: string; arch: string; nodeRange: string };
+}
+
+function prepareBaseBinary(
+  targetSpec: { platform: string; arch: string; nodeRange: string },
+  binaryPath: string,
+): { effectiveBinaryPath: string; cleanup: () => void } {
+  if (targetSpec.platform !== 'macos') {
+    return { effectiveBinaryPath: binaryPath, cleanup: () => {} };
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hakobu-base-'));
+  const stripped = path.join(tmpDir, path.basename(binaryPath) + '.unsigned');
+  fs.copyFileSync(binaryPath, stripped);
+
+  try {
+    execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
+  } catch {
+    // Some cache entries are already unsigned; stripping is best-effort.
+  }
+
+  return {
+    effectiveBinaryPath: stripped,
+    cleanup: () => {
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
+    },
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -317,67 +346,62 @@ async function packageAppForTarget(
     arch: targetSpec.arch,
   });
 
-  // Strip macOS code signature
-  let effectiveBinaryPath = binaryPath;
-  if (targetSpec.platform === 'macos') {
-    const stripped = binaryPath + '.unsigned';
-    fs.copyFileSync(binaryPath, stripped);
-    try {
-      execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
-    } catch {}
-    effectiveBinaryPath = stripped;
-  }
+  const preparedBase = prepareBaseBinary(targetSpec, binaryPath);
 
-  // Build payload
-  const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
-  const slash = targetSpec.platform === 'win' ? '\\' : '/';
-  const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
+  try {
+    // Build payload
+    const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
+    const slash = targetSpec.platform === 'win' ? '\\' : '/';
+    const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
 
-  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+    fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
-  const target: Target = {
-    nodeRange: targetSpec.nodeRange,
-    platform: targetSpec.platform as any,
-    arch: targetSpec.arch,
-    binaryPath: effectiveBinaryPath,
-    output: path.resolve(outputPath),
-    fabricator: {
+    const target: Target = {
       nodeRange: targetSpec.nodeRange,
-      platform: system.hostPlatform as any,
-      arch: system.hostArch,
-      // For bytecode compilation, the fabricator must use the patched base binary
-      // (which has sourceless: true support). For source-only mode, it doesn't matter
-      // because STORE_BLOB stripes are removed by the packer.
-      binaryPath: options.bytecode ? binaryPath : process.execPath,
-      output: '',
-      fabricator: null as any,
-    },
-  };
+      platform: targetSpec.platform as any,
+      arch: targetSpec.arch,
+      binaryPath: preparedBase.effectiveBinaryPath,
+      output: path.resolve(outputPath),
+      fabricator: {
+        nodeRange: targetSpec.nodeRange,
+        platform: system.hostPlatform as any,
+        arch: system.hostArch,
+        // For bytecode compilation, the fabricator must use the patched base binary
+        // (which has sourceless: true support). For source-only mode, it doesn't matter
+        // because STORE_BLOB stripes are removed by the packer.
+        binaryPath: options.bytecode ? binaryPath : process.execPath,
+        output: '',
+        fabricator: null as any,
+      },
+    };
 
-  await producer({
-    backpack, bakes: [], slash, target, symLinks,
-    doCompress: CompressType.None, nativeBuild: false,
-  });
+    await producer({
+      backpack, bakes: [], slash, target, symLinks,
+      doCompress: CompressType.None, nativeBuild: false,
+    });
 
-  // Post-production
-  if (targetSpec.platform !== 'win') {
-    if (targetSpec.platform === 'macos') {
-      const buf = patchMachOExecutable(fs.readFileSync(target.output));
-      fs.writeFileSync(target.output, buf);
-      try { signMachOExecutable(target.output); } catch {}
+    // Post-production
+    if (targetSpec.platform !== 'win') {
+      if (targetSpec.platform === 'macos') {
+        const buf = patchMachOExecutable(fs.readFileSync(target.output));
+        fs.writeFileSync(target.output, buf);
+        try { signMachOExecutable(target.output); } catch {}
+      }
+      await plusx(target.output);
     }
-    await plusx(target.output);
+
+    // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
+    shutdownFabricator();
+
+    return {
+      outputPath: path.resolve(outputPath),
+      manifest,
+      fileCount: Object.keys(manifest.files).length,
+      target: targetSpec,
+    };
+  } finally {
+    preparedBase.cleanup();
   }
-
-  // Kill fabricator child processes (bytecode compilation spawns long-lived workers)
-  shutdownFabricator();
-
-  return {
-    outputPath: path.resolve(outputPath),
-    manifest,
-    fileCount: Object.keys(manifest.files).length,
-    target: targetSpec,
-  };
 }
 
 function appIdFromProject(projectRoot: string): string {
@@ -526,90 +550,86 @@ async function packageAppInner(
   // The producer appends data past __LINKEDIT, which invalidates the adhoc
   // signature and makes subsequent codesign operations fail. Stripping the
   // signature first lets us patch + re-sign cleanly after production.
-  let effectiveBinaryPath = binaryPath;
-  if (targetSpec.platform === 'macos') {
-    const stripped = binaryPath + '.unsigned';
-    fs.copyFileSync(binaryPath, stripped);
-    try {
-      execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
-    } catch { /* already unsigned */ }
-    effectiveBinaryPath = stripped;
-  }
+  const preparedBase = prepareBaseBinary(targetSpec, binaryPath);
 
-  // ── 4. Bridge: manifest → inherited FileRecords + Stripe format ──
-  log.info('Building payload...');
+  try {
+    // ── 4. Bridge: manifest → inherited FileRecords + Stripe format ──
+    log.info('Building payload...');
 
-  const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
+    const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
 
-  // ── 5. Pack using inherited packer ──
-  const slash = targetSpec.platform === 'win' ? '\\' : '/';
-  const backpack = packer({
-    records,
-    entrypoint,
-    bytecode: !!options.bytecode,
-    symLinks,
-  });
+    // ── 5. Pack using inherited packer ──
+    const slash = targetSpec.platform === 'win' ? '\\' : '/';
+    const backpack = packer({
+      records,
+      entrypoint,
+      bytecode: !!options.bytecode,
+      symLinks,
+    });
 
-  // ── 6. Build target object for producer ──
-  const outputPath = options.output || defaultOutputPath(manifest.appId, targetSpec);
-  fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
+    // ── 6. Build target object for producer ──
+    const outputPath = options.output || defaultOutputPath(manifest.appId, targetSpec);
+    fs.mkdirSync(path.dirname(path.resolve(outputPath)), { recursive: true });
 
-  const target: Target = {
-    nodeRange: targetSpec.nodeRange,
-    platform: targetSpec.platform as any,
-    arch: targetSpec.arch,
-    binaryPath: effectiveBinaryPath,
-    output: path.resolve(outputPath),
-    fabricator: {
+    const target: Target = {
       nodeRange: targetSpec.nodeRange,
-      platform: system.hostPlatform as any,
-      arch: system.hostArch,
-      binaryPath: options.bytecode ? binaryPath : process.execPath,
-      output: '',
-      fabricator: null as any,
-    },
-  };
+      platform: targetSpec.platform as any,
+      arch: targetSpec.arch,
+      binaryPath: preparedBase.effectiveBinaryPath,
+      output: path.resolve(outputPath),
+      fabricator: {
+        nodeRange: targetSpec.nodeRange,
+        platform: system.hostPlatform as any,
+        arch: system.hostArch,
+        binaryPath: options.bytecode ? binaryPath : process.execPath,
+        output: '',
+        fabricator: null as any,
+      },
+    };
 
-  // ── 7. Produce executable using inherited producer ──
-  log.info(`Writing ${outputPath}...`);
+    // ── 7. Produce executable using inherited producer ──
+    log.info(`Writing ${outputPath}...`);
 
-  await producer({
-    backpack,
-    bakes: [],
-    slash,
-    target,
-    symLinks,
-    doCompress: CompressType.None,
-    nativeBuild: false,
-  });
+    await producer({
+      backpack,
+      bakes: [],
+      slash,
+      target,
+      symLinks,
+      doCompress: CompressType.None,
+      nativeBuild: false,
+    });
 
-  // ── 8. Post-production: Mach-O patching + codesign + chmod ──
-  if (targetSpec.platform !== 'win') {
-    if (targetSpec.platform === 'macos') {
-      // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
-      const buf = patchMachOExecutable(fs.readFileSync(target.output));
-      fs.writeFileSync(target.output, buf);
-      try {
-        signMachOExecutable(target.output);
-      } catch {
-        if (targetSpec.arch === 'arm64') {
-          log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+    // ── 8. Post-production: Mach-O patching + codesign + chmod ──
+    if (targetSpec.platform !== 'win') {
+      if (targetSpec.platform === 'macos') {
+        // Base was pre-stripped in step 3b, so __LINKEDIT patch + fresh sign works cleanly
+        const buf = patchMachOExecutable(fs.readFileSync(target.output));
+        fs.writeFileSync(target.output, buf);
+        try {
+          signMachOExecutable(target.output);
+        } catch {
+          if (targetSpec.arch === 'arm64') {
+            log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+          }
         }
       }
+      await plusx(target.output);
     }
-    await plusx(target.output);
+
+    shutdownFabricator();
+
+    log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${outputPath}`);
+
+    return {
+      outputPath: path.resolve(outputPath),
+      manifest,
+      fileCount: Object.keys(manifest.files).length,
+      target: targetSpec,
+    };
+  } finally {
+    preparedBase.cleanup();
   }
-
-  shutdownFabricator();
-
-  log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${outputPath}`);
-
-  return {
-    outputPath: path.resolve(outputPath),
-    manifest,
-    fileCount: Object.keys(manifest.files).length,
-    target: targetSpec,
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -36,7 +36,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/hakobu-fetch/**"
+      - "packages/hakobu-fetch/patches/**"
+      - "packages/hakobu-fetch/Dockerfile.*"
+      - "packages/hakobu-fetch/scripts/**"
+      - "packages/hakobu-fetch/PROVENANCE.json"
+      - "packages/hakobu-fetch/shas.txt"
+      - "packages/hakobu-fetch/lib/expected-shas.json"
       - ".github/workflows/build-bases.yml"
 
 env:
