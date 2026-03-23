@@ -146,6 +146,12 @@ export interface PackageOptions {
    * Only valid for Linux targets.
    */
   appImage?: boolean;
+
+  /**
+   * Snapshot compression algorithm.
+   * 'brotli' or 'gzip'. Default: none (uncompressed).
+   */
+  compress?: 'brotli' | 'gzip';
 }
 
 export interface PackageResult {
@@ -218,6 +224,7 @@ export interface PackageMultipleOptions {
   appDir?: boolean;
   linux?: LinuxDesktopMetadata;
   appImage?: boolean;
+  compress?: 'brotli' | 'gzip';
 }
 
 export interface PackageMultipleResult {
@@ -464,7 +471,7 @@ async function packageAppForTarget(
 
     await producer({
       backpack, bakes: [], slash, target, symLinks,
-      doCompress: CompressType.None, nativeBuild: false,
+      doCompress: resolveCompressType(options.compress), nativeBuild: false,
     });
 
     // Post-production
@@ -775,7 +782,7 @@ async function packageAppInner(
       slash,
       target,
       symLinks,
-      doCompress: CompressType.None,
+      doCompress: resolveCompressType(options.compress),
       nativeBuild: false,
     });
 
@@ -1232,6 +1239,15 @@ import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
+
+function resolveCompressType(value?: 'brotli' | 'gzip'): CompressType {
+  if (!value) return CompressType.None;
+  switch (value) {
+    case 'brotli': return CompressType.Brotli;
+    case 'gzip': return CompressType.GZip;
+    default: return CompressType.None;
+  }
+}
 
 function parseTarget(spec?: string): { nodeRange: string; platform: string; arch: string } {
   if (!spec || spec === 'host') {

@@ -37,6 +37,7 @@ Bundle mode (optional — for TypeScript / monorepo projects):
 
 Advanced:
   --bytecode          Compile JS to V8 bytecode before packaging
+  --compress <algo>   Compress snapshot payload (Brotli or GZip)
   --app-bundle        Wrap macOS output in a .app bundle (macOS only)
                       Output path becomes the .app directory
   --appdir            Wrap Linux output in an AppDir (Linux only)
@@ -265,6 +266,7 @@ async function main() {
           appDir: options.appDir,
           linux: options.linux,
           appImage: options.appImage,
+          compress: options.compress,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

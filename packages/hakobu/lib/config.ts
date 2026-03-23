@@ -101,6 +101,12 @@ export interface HakobuConfig {
   appImage?: boolean;
 
   /**
+   * Snapshot compression algorithm: 'brotli' or 'gzip'.
+   * Default: none (uncompressed).
+   */
+  compress?: 'brotli' | 'gzip';
+
+  /**
    * Linux desktop metadata for .desktop file generation.
    * Only used when appDir is true.
    */
@@ -241,7 +247,6 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
 
   // ── Reject unsupported legacy CLI flags ──
   checkUnsupportedCliFlag(args, 'no-bytecode', warnings);
-  checkUnsupportedCliFlag(args, 'compress', warnings);
   checkUnsupportedCliFlag(args, 'public', warnings);
   checkUnsupportedCliFlag(args, 'public-packages', warnings);
   checkUnsupportedCliFlag(args, 'sea', warnings);
@@ -319,6 +324,25 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
   // Bytecode mode — CLI --bytecode overrides config only when explicitly true
   const bytecode = args.bytecode === true ? true : (source.bytecode ?? false);
 
+  // Compression — CLI --compress overrides config
+  let compress: 'brotli' | 'gzip' | undefined;
+  if (args.compress) {
+    const algo = String(args.compress).toLowerCase();
+    if (algo === 'brotli' || algo === 'br') {
+      compress = 'brotli';
+    } else if (algo === 'gzip' || algo === 'gz') {
+      compress = 'gzip';
+    } else if (algo !== 'none') {
+      warnings.push({
+        type: 'unsupported',
+        option: '--compress',
+        message: `--compress "${args.compress}" is not supported. Use Brotli or GZip (or omit for no compression).`,
+      });
+    }
+  } else {
+    compress = hakobuConfig?.compress;
+  }
+
   // Metadata — from "hakobu.metadata" in package.json
   const metadata = hakobuConfig?.metadata;
 
@@ -339,6 +363,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       appDir: hakobuConfig?.appDir,
       appImage: hakobuConfig?.appImage,
       linux: hakobuConfig?.linux,
+      compress,
     },
     warnings,
   };
@@ -442,7 +467,7 @@ function checkUnsupportedCliFlag(
   if (args[flag] !== undefined && args[flag] !== false) {
     const messages: Record<string, string> = {
       'no-bytecode': '--no-bytecode is not needed. Hakobu defaults to source-only mode. Use --bytecode to opt in to bytecode compilation.',
-      'compress': '--compress is not supported. Hakobu does not compress the snapshot payload.',
+      // compress is now supported — handled in normalization above
       'public': '--public is not supported. Hakobu always includes source.',
       'public-packages': '--public-packages is not supported. Hakobu always includes source.',
       'sea': '--sea is not supported. Hakobu uses its own snapshot format, not Node SEA.',

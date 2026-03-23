@@ -198,8 +198,7 @@ The cache location is configurable via `HAKOBU_CACHE_PATH`.
 ## Current known limits
 
 1. **Node 24 only** — no support for older Node lines.
-2. **No snapshot compression** — payload is uncompressed.
-3. **`process.execPath -e` not supported** — use script files for child eval.
+2. **`process.execPath -e` not supported** — use script files for child eval.
 4. **No `--options` (V8 flags)** — V8 flag baking is not implemented.
 5. **`linuxstatic-arm64` blocked** — toolchain incompatibility.
 6. **Bytecode + bundle incompatible** — use one or the other.

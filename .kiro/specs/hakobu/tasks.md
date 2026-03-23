@@ -782,3 +782,44 @@
     - Added to CI RC gate on macOS runner
     - _Depends on: 26.1_
     - **Output:** `fixtures/test-code-split.js`, `.github/workflows/ci.yml`
+
+- [ ] 27. Migration parity with @yao-pkg/pkg
+  - [x] 27.1 Wire snapshot compression through new CLI/packager
+    - Wired `--compress Brotli|GZip` (also `-C`) through the new CLI
+    - Added `compress` to `HakobuConfig`, `PackageOptions`,
+      `PackageMultipleOptions`
+    - Normalized CLI input: Brotli/br → brotli, GZip/gz → gzip,
+      None → omit, invalid → clear error
+    - Passed `CompressType` through to existing producer via
+      `resolveCompressType()` in both packaging paths
+    - Removed `--compress` from unsupported-flag rejection
+    - Default remains uncompressed (None)
+    - Compressed executables run correctly
+    - Updated `docs/migration-from-pkg.md` and `docs/runtime-support.md`
+    - _Depends on: 10.1_
+    - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
+      `docs/migration-from-pkg.md`, `docs/runtime-support.md`
+
+  - [ ] 27.2 Wire V8 flags baking through new CLI/packager
+    - Expose `--options "expose-gc,max-heap-size=34"` in the new CLI
+    - Pass the bakes array through to the existing producer
+    - Verify baked flags are active at runtime in the packaged executable
+    - _Depends on: 10.1_
+
+  - [ ] 27.3 Wire debug/verbose mode through new CLI/packager
+    - Expose `--debug` / `-d` in the new `bin.ts` CLI
+    - Set `log.debugMode` so the inherited walker/producer emit detailed
+      diagnostics
+    - _Depends on: 10.1_
+
+  - [ ] 27.4 Wire force-build through new CLI/fetch
+    - Expose `--build` / `-b` in the new CLI
+    - Pass `forceBuild` through to `hakobu-fetch` `need()` calls
+    - Verify local base-binary compilation is triggered
+    - _Depends on: 10.1_
+
+  - [ ] 27.5 Add win-arm64 target support
+    - Build a patched Node 24 base binary for Windows ARM64
+    - Add expected hash and CI build job
+    - Verify fixture passes on win-arm64 (may require hosted runner)
+    - _Depends on: 3.2_

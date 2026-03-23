@@ -77,7 +77,7 @@ If both `"hakobu"` and `"pkg"` fields exist, `"hakobu"` takes priority and
 | `-c`, `--config` | Not supported | Use `"hakobu"` field in package.json. |
 | `--out-path` | `--output` | Accepted with warning. Use `--output` with a full path. |
 | `--no-bytecode` | Not needed | Hakobu always packages source (no bytecode mode). |
-| `--compress` | Not supported | Hakobu does not compress the snapshot payload. |
+| `--compress` | `--compress` | Same. Supports Brotli and GZip. |
 | `--public` | Not needed | Hakobu always includes source. |
 | `--sea` | Not supported | Hakobu uses its own snapshot format. |
 | `--options` | Not supported | V8 flag baking is not yet available. |
