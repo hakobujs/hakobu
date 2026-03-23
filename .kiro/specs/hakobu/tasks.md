@@ -729,3 +729,33 @@
     - Skips gracefully on non-Linux and when appimagetool is absent
     - _Depends on: 25.2_
     - **Output:** `fixtures/test-appdir.js`
+
+- [ ] 26. Bundle code-split quality improvements
+  - [x] 26.1 Inject per-chunk `__dirname`/`__filename` for split chunks
+    - Replaced single-chunk fallback with per-chunk polyfill injection:
+      `injectPathGlobalsPerChunk()` scans each emitted chunk with the
+      existing AST scanner and injects `__dirname`/`__filename` only
+      into chunks that actually use those globals
+    - All chunks get the `CHUNK_BANNER` (node:url + node:path imports);
+      the path globals polyfill is added only where needed
+    - Result for `camoufox-ts/example`:
+      Before: `single-chunk, 1 chunk` (fallback)
+      After:  `code-split, 8 chunks` (1 chunk injected)
+    - Packaged executable runs correctly with code-split output
+    - All existing tests pass (fixtures, source maps, multi-target,
+      bytecode)
+    - _Depends on: 16.1_
+    - **Output:** `bundler.ts`
+
+  - [ ] 26.2 Improve externalization diagnostics
+    - When code-splitting is active, emit clear diagnostics about which
+      modules were externalized and why
+    - Suggest `--external` patterns when bundler-hostile packages cause
+      warnings or fallback
+    - _Depends on: 26.1_
+
+  - [ ] 26.3 Add code-split fixture with `__dirname`-using dependency
+    - Create a fixture that exercises code-splitting with a dependency
+      that uses `__dirname` (simulating the Playwright pattern)
+    - Verify that code-splitting is preserved after per-chunk injection
+    - _Depends on: 26.1_

@@ -62,6 +62,9 @@ export interface BundleOutput {
   /** Why bundle mode fell back to single-chunk, if it did. */
   fallbackReason?: string;
 
+  /** Chunks that had __dirname/__filename polyfill injected. */
+  injectedChunks?: string[];
+
   /** Source map files emitted alongside the bundle (relative to projectRoot). */
   mapFiles: string[];
 
@@ -179,6 +182,9 @@ export class RolldownAdapter implements BundleAdapter {
       if (writeResult.fallbackReason) {
         log.info(`  fallback: ${writeResult.fallbackReason}`);
       }
+      if (writeResult.injectedChunks && writeResult.injectedChunks.length > 0) {
+        log.info(`  injected __dirname/__filename into ${writeResult.injectedChunks.length} chunk(s)`);
+      }
 
       if (warnings.length > 0) {
         log.warn(`  ${warnings.length} bundler warning(s)`);
@@ -194,6 +200,7 @@ export class RolldownAdapter implements BundleAdapter {
         strategy: writeResult.strategy,
         chunkCount: writeResult.chunkCount,
         fallbackReason: writeResult.fallbackReason,
+        injectedChunks: writeResult.injectedChunks,
         mapFiles: relativeMapFiles,
         cleanup: () => {
           try {
@@ -219,42 +226,41 @@ interface WrittenBundle {
   fallbackReason?: string;
   jsFiles: string[];
   mapFiles: string[];
+  /** Chunk filenames that had __dirname/__filename polyfill injected. */
+  injectedChunks?: string[];
 }
 
-const MULTI_CHUNK_BANNER = [
+const CHUNK_BANNER = [
   `import{fileURLToPath as _hk_f}from'node:url';`,
   `import{dirname as _hk_d}from'node:path';`,
 ].join('');
 
-const SINGLE_CHUNK_BANNER = [
-  MULTI_CHUNK_BANNER,
-  `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`,
-].join('');
+const PATH_GLOBALS_POLYFILL =
+  `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`;
 
 async function writeBundleOutput(
   build: any,
   tmpDir: string,
   outFile: string,
 ): Promise<WrittenBundle> {
-  const splitResult = await writeBundle(build, tmpDir, outFile, true);
-  const unsafeReason = detectSingleChunkFallback(splitResult.jsFiles);
-  if (unsafeReason) {
-    resetBundleDir(tmpDir);
-    const singleResult = await writeBundle(build, tmpDir, outFile, false);
-    return {
-      strategy: 'single-chunk',
-      chunkCount: singleResult.jsFiles.length,
-      fallbackReason: unsafeReason,
-      jsFiles: singleResult.jsFiles,
-      mapFiles: singleResult.mapFiles,
-    };
-  }
+  // Always try code-splitting first
+  const result = await writeBundle(build, tmpDir, outFile, true);
+
+  // Inject __dirname/__filename polyfill into only the chunks that need it.
+  // Each chunk is scanned for bare __dirname/__filename references; if found,
+  // the polyfill is prepended. Chunks without these globals are left untouched.
+  const injectedChunks = injectPathGlobalsPerChunk(result.jsFiles);
+
+  const isSplit = result.jsFiles.length > 1;
 
   return {
-    strategy: splitResult.jsFiles.length > 1 ? 'code-split' : 'single-chunk',
-    chunkCount: splitResult.jsFiles.length,
-    jsFiles: splitResult.jsFiles,
-    mapFiles: splitResult.mapFiles,
+    strategy: isSplit ? 'code-split' : 'single-chunk',
+    chunkCount: result.jsFiles.length,
+    jsFiles: result.jsFiles,
+    mapFiles: result.mapFiles,
+    ...(injectedChunks.length > 0 ? {
+      injectedChunks: injectedChunks.map(f => path.basename(f)),
+    } : {}),
   };
 }
 
@@ -271,7 +277,7 @@ async function writeBundle(
     chunkFileNames: 'chunks/[name]-[hash].js',
     sourcemap: true,
     codeSplitting,
-    banner: codeSplitting ? MULTI_CHUNK_BANNER : SINGLE_CHUNK_BANNER,
+    banner: CHUNK_BANNER,
   });
 
   return listBundleFiles(tmpDir);
@@ -305,6 +311,47 @@ function listBundleFiles(rootDir: string): { jsFiles: string[]; mapFiles: string
 function resetBundleDir(tmpDir: string): void {
   fs.rmSync(tmpDir, { recursive: true, force: true });
   fs.mkdirSync(tmpDir, { recursive: true });
+}
+
+/**
+ * Inject __dirname/__filename polyfill into specific chunks that use
+ * those globals. Returns the list of files that were injected.
+ *
+ * This replaces the old single-chunk fallback: instead of abandoning
+ * code-splitting when any chunk uses __dirname, we inject the polyfill
+ * into only the chunks that need it.
+ */
+function injectPathGlobalsPerChunk(jsFiles: string[]): string[] {
+  const injected: string[] = [];
+
+  for (const file of jsFiles) {
+    const globals = findUnsafeNodePathGlobals(file);
+    if (globals.length > 0) {
+      injectPolyfillIntoFile(file);
+      injected.push(file);
+    }
+  }
+
+  return injected;
+}
+
+/**
+ * Prepend the __dirname/__filename polyfill to a JS file.
+ * Inserts after the CHUNK_BANNER (import statements) if present.
+ */
+function injectPolyfillIntoFile(filePath: string): void {
+  const code = fs.readFileSync(filePath, 'utf8');
+  // The banner is at the top of the file. Insert the polyfill right after it.
+  // The banner ends with the last import statement's semicolon.
+  const bannerEnd = code.indexOf(`from'node:path';`);
+  if (bannerEnd >= 0) {
+    const insertPos = bannerEnd + `from'node:path';`.length;
+    const patched = code.slice(0, insertPos) + PATH_GLOBALS_POLYFILL + code.slice(insertPos);
+    fs.writeFileSync(filePath, patched);
+  } else {
+    // No banner found — prepend the full polyfill with imports
+    fs.writeFileSync(filePath, CHUNK_BANNER + PATH_GLOBALS_POLYFILL + code);
+  }
 }
 
 function detectSingleChunkFallback(jsFiles: string[]): string | null {
