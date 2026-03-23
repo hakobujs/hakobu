@@ -183,7 +183,7 @@ test('legacy: pkg.dictionary rejected as unsupported', () => {
   } finally { cleanup(dir); }
 });
 
-// ── Unsupported CLI flags ──
+// ── CLI compatibility and validation ──
 
 test('cli: --no-bytecode rejected', () => {
   const dir = withProject({ name: 'test' });
@@ -205,13 +205,24 @@ test('cli: --sea rejected', () => {
   } finally { cleanup(dir); }
 });
 
-test('cli: --compress rejected', () => {
+test('cli: --compress accepted', () => {
   const dir = withProject({ name: 'test' });
   try {
-    const { warnings } = normalizeConfig({ projectRoot: dir, compress: 'GZip' });
+    const { options, warnings } = normalizeConfig({ projectRoot: dir, compress: 'GZip' });
+    const w = warnings.find(w => w.option === '--compress');
+    assert.strictEqual(w, undefined);
+    assert.strictEqual(options.compress, 'gzip');
+  } finally { cleanup(dir); }
+});
+
+test('cli: invalid --compress rejected', () => {
+  const dir = withProject({ name: 'test' });
+  try {
+    const { options, warnings } = normalizeConfig({ projectRoot: dir, compress: 'LZMA' });
     const w = warnings.find(w => w.option === '--compress');
     assert(w);
     assert.strictEqual(w.type, 'unsupported');
+    assert.strictEqual(options.compress, undefined);
   } finally { cleanup(dir); }
 });
 
