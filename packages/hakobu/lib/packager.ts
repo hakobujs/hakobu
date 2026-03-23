@@ -477,6 +477,13 @@ async function packageAppForTarget(
       },
     };
 
+    log.debug(`Producer input:`, [
+      `  target: ${JSON.stringify(target.output)}`,
+      `  bakes: ${JSON.stringify(options.options || [])}`,
+      `  compress: ${options.compress || 'none'}`,
+      `  stripes: ${backpack.stripes.length}`,
+    ]);
+
     await producer({
       backpack, bakes: options.options || [], slash, target, symLinks,
       doCompress: resolveCompressType(options.compress), nativeBuild: false,
@@ -709,6 +716,13 @@ async function packageAppInner(
   log.info(`  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`);
   log.info(`  files: ${Object.keys(manifest.files).length}`);
 
+  log.debug('Manifest details:', [
+    `  projectRoot: ${projectRoot}`,
+    `  appId: ${manifest.appId}`,
+    `  file count: ${Object.keys(manifest.files).length}`,
+    `  warnings: ${manifest.warnings.length}`,
+  ]);
+
   if (manifest.warnings.length > 0) {
     for (const w of manifest.warnings) {
       if (w.severity === 'error') {
@@ -784,6 +798,14 @@ async function packageAppInner(
     // ── 7. Produce executable using inherited producer ──
     log.info(`Writing ${outputPath}...`);
 
+    log.debug('Producer input:', [
+      `  output: ${path.resolve(outputPath)}`,
+      `  bakes: ${JSON.stringify(options.options || [])}`,
+      `  compress: ${options.compress || 'none'}`,
+      `  bytecode: ${!!options.bytecode}`,
+      `  stripes: ${backpack.stripes.length}`,
+    ]);
+
     await producer({
       backpack,
       bakes: options.options || [],
@@ -795,6 +817,7 @@ async function packageAppInner(
     });
 
     // ── 8. Post-production: signing + chmod ──
+    log.debug(`Post-production: platform=${targetSpec.platform}, appBundle=${!!options.appBundle}, appDir=${!!options.appDir}`);
     let finalOutputPath = path.resolve(requestedOutput);
 
     if (targetSpec.platform === 'macos') {

@@ -72,8 +72,9 @@ If both `"hakobu"` and `"pkg"` fields exist, `"hakobu"` takes priority and
 
 | pkg flag | Hakobu flag | Notes |
 |---|---|---|
-| `-t`, `--targets` | `--target` | Singular. Comma-separated multi-target is accepted but deprecated (uses first). |
+| `-t`, `--targets` | `--target` | Singular. Comma-separated multi-target or `all` for all published targets. |
 | `-o`, `--output` | `--output` | Same. |
+| `-d`, `--debug` | `--debug` / `-d` | Same. Shows detailed packaging diagnostics. |
 | `-c`, `--config` | Not supported | Use `"hakobu"` field in package.json. |
 | `--out-path` | `--output` | Accepted with warning. Use `--output` with a full path. |
 | `--no-bytecode` | Not needed | Hakobu always packages source (no bytecode mode). |
@@ -104,15 +105,15 @@ Unsupported options detected. Remove them or see migration guidance above.
 - **Hakobu:** Native ESM by default. `"type": "module"` in package.json works.
   CJS also works. Mixed ESM/CJS with `createRequire()` works.
 
-### 3. Single target per invocation
+### 3. Multi-target builds
 
 - **pkg:** `pkg -t node18-linux,node18-win,node18-macos .` builds three executables.
-- **Hakobu:** Builds one target at a time. For multiple targets:
+- **Hakobu:** Same syntax supported. Comma-separated targets or `all`:
   ```bash
-  hakobu . --target node24-linux-x64 --output dist/app-linux
-  hakobu . --target node24-win-x64 --output dist/app-win.exe
-  hakobu . --target node24-macos-arm64 --output dist/app-macos
+  hakobu . --target node24-linux-x64,node24-win-x64,node24-macos-arm64 --output dist/
+  hakobu . --target all --output dist/
   ```
+  Shared analysis and parallel base binary fetching for efficiency.
 
 ### 4. No bytecode compilation
 

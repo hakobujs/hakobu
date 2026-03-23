@@ -816,11 +816,20 @@
     - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
       `docs/migration-from-pkg.md`, `docs/runtime-support.md`
 
-  - [ ] 27.3 Wire debug/verbose mode through new CLI/packager
-    - Expose `--debug` / `-d` in the new `bin.ts` CLI
-    - Set `log.debugMode` so the inherited walker/producer emit detailed
-      diagnostics
+  - [x] 27.3 Wire debug/verbose mode through new CLI/packager
+    - Wired `--debug` / `-d` in the new `bin.ts` CLI
+    - Sets `log.debugMode = true` which activates `log.debug()` calls
+      throughout the inherited pipeline (walker, packer, producer,
+      fabricator, resolver, ESM transformer)
+    - Added debug logging at key new-path decision points: manifest
+      details, producer input, post-production decisions
+    - Normal mode (9 lines): unchanged
+    - Debug mode (36+ lines): manifest details, file inclusion
+      decisions, deduplication, producer config, post-production state
+    - Updated `docs/migration-from-pkg.md` with `--debug` mapping and
+      fixed stale multi-target documentation
     - _Depends on: 10.1_
+    - **Output:** `bin.ts`, `packager.ts`, `docs/migration-from-pkg.md`
 
   - [ ] 27.4 Wire force-build through new CLI/fetch
     - Expose `--build` / `-b` in the new CLI

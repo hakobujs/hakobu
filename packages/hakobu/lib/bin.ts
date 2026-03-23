@@ -30,6 +30,7 @@ Options:
   --entry <file>      Entry file (relative to project root)
   --help, -h          Show this help
   --version, -v       Show version
+  --debug, -d         Show detailed packaging diagnostics
 
 Bundle mode (optional — for TypeScript / monorepo projects):
   --bundle [name]     Pre-bundle with Rolldown before packaging
@@ -148,6 +149,11 @@ async function main() {
   if (argv.help || argv._.length === 0) {
     console.log(USAGE);
     return;
+  }
+
+  // Debug mode — activates verbose logging throughout the pipeline
+  if (argv.debug) {
+    log.debugMode = true;
   }
 
   const command = argv._[0];
