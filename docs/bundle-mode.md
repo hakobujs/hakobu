@@ -95,20 +95,20 @@ await packageApp({
 Bundle mode produces a working executable, but the internals differ from native
 mode in specific ways. These are tradeoffs, not bugs.
 
-### Output shape: code-split when safe, single-chunk when required
+### Output shape: code-split with per-chunk polyfills
 
-The Rolldown adapter now attempts **code-split output first**. If the emitted
-chunks are safe for packaged execution, Hakobu keeps the chunk graph. If the
-bundle still contains raw CJS `__dirname` / `__filename` globals that would be
-incorrect after splitting, Hakobu falls back to the existing single-chunk path.
+The Rolldown adapter produces **code-split output** and injects `__dirname` /
+`__filename` polyfills only into the specific chunks that need them. This
+preserves code-splitting for real-world dependency graphs (e.g., Playwright-
+based projects where only one chunk uses `__dirname`).
 
 This means:
 
 - **No `node_modules` in the snapshot.** Dependencies are still bundled into JS output files.
 - **Dynamic `import()` with variable arguments may still break.** Only statically
   traceable imports can be bundled.
-- **Source maps are planned.** When implemented, sidecar `.map` files will be
-  included in the snapshot. Enable with `NODE_OPTIONS=--enable-source-maps`.
+- **Source maps** are included as sidecar `.map` files in the snapshot.
+  Enable with `NODE_OPTIONS=--enable-source-maps` or `process.setSourceMapsEnabled(true)`.
   See `docs/bundle-source-maps.md` for the design contract.
 - **Chunk count is correctness-driven.** Safe projects can produce multiple chunks;
   unsafe ones fall back to one.
@@ -119,17 +119,19 @@ Rolldown outputs ESM format. CJS modules that use `__dirname` or `__filename`
 are converted, but some references survive without polyfills — particularly in
 deeply nested CJS code that Rolldown inlines verbatim.
 
-Hakobu's Rolldown adapter addresses this in two ways:
-- In code-split mode, it injects helper imports so Rolldown can lower many
-  CommonJS `__dirname` / `__filename` references to `import.meta.url`-based expressions.
-- If raw `__dirname` / `__filename` globals still survive in emitted chunks,
-  Hakobu falls back to a single-chunk bundle with explicit module-level
-  `__dirname` / `__filename` shims.
+Hakobu's Rolldown adapter addresses this with **per-chunk polyfill injection**:
+each emitted chunk is scanned for bare `__dirname` / `__filename` references.
+Only the specific chunks that use these globals get the polyfill injected —
+code-splitting is preserved for all other chunks.
 
-**Caveat:** In single-chunk fallback mode, the `__dirname` value points to the
-snapshot entry directory, not to the original source file's directory. In
-code-split mode, per-chunk `import.meta.url` lowering keeps chunk-local paths
-correct for the safe supported subset.
+The polyfill derives `__dirname` and `__filename` from `import.meta.url`,
+which gives each chunk its own correct snapshot path at runtime.
+
+The diagnostics output shows which chunks needed injection:
+```
+  injected __dirname/__filename into 1 chunk(s)
+  [bundle] __dirname/__filename polyfill injected into: playwright-DlLWImK5.js (CJS-origin code)
+```
 
 ### External modules
 

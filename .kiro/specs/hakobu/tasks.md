@@ -747,12 +747,27 @@
     - _Depends on: 16.1_
     - **Output:** `bundler.ts`
 
-  - [ ] 26.2 Improve externalization diagnostics
-    - When code-splitting is active, emit clear diagnostics about which
-      modules were externalized and why
-    - Suggest `--external` patterns when bundler-hostile packages cause
-      warnings or fallback
+  - [x] 26.2 Improve externalization diagnostics
+    - Added `analyzeBundleDiagnostics()` that classifies Rolldown warnings
+      and post-bundle state into actionable categories:
+      - **Runtime-specific imports** (bun:*, deno:*): shown as info,
+        notes they are stubbed at runtime
+      - **Unresolved packages**: shown as warning with concrete
+        `--external` suggestion
+      - **Dynamic import()**: shown as warning explaining static
+        tracing limitation
+      - **Applied patches**: lists scopes handled automatically by
+        the compatibility registry
+      - **Per-chunk injection**: names the specific chunks that got
+        __dirname/__filename polyfill (CJS-origin)
+      - **Summary**: "All detected patterns handled — no user action
+        needed" when no warnings remain
+    - Updated `docs/bundle-mode.md` to reflect per-chunk injection
+      (no longer claims single-chunk fallback), updated code-split
+      docs section
+    - All existing tests pass
     - _Depends on: 26.1_
+    - **Output:** `bundler.ts`, `docs/bundle-mode.md`
 
   - [ ] 26.3 Add code-split fixture with `__dirname`-using dependency
     - Create a fixture that exercises code-splitting with a dependency

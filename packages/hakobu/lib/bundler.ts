@@ -155,8 +155,9 @@ export class RolldownAdapter implements BundleAdapter {
       const writeResult = await writeBundleOutput(build, tmpDir, outFile);
 
       // Post-bundle: apply compatibility patches for bundler-hostile packages
+      const applied: string[] = [];
       for (const file of writeResult.jsFiles) {
-        applyBundlePatches(file);
+        applied.push(...applyBundlePatches(file));
       }
 
       // Create a minimal package.json for the bundled output
@@ -186,8 +187,19 @@ export class RolldownAdapter implements BundleAdapter {
         log.info(`  injected __dirname/__filename into ${writeResult.injectedChunks.length} chunk(s)`);
       }
 
-      if (warnings.length > 0) {
-        log.warn(`  ${warnings.length} bundler warning(s)`);
+      // Post-bundle diagnostics: classify warnings and scan for unhandled patterns
+      const diagnostics = analyzeBundleDiagnostics(
+        warnings,
+        writeResult,
+        applied,
+        external,
+      );
+      for (const d of diagnostics) {
+        if (d.severity === 'info') {
+          log.info(`  ${d.message}`);
+        } else {
+          log.warn(`  ${d.message}`);
+        }
       }
 
       // Collect map file paths relative to tmpDir for asset inclusion
@@ -383,6 +395,124 @@ function findUnsafeNodePathGlobals(filePath: string): string[] {
   });
 
   return Array.from(found);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Bundle diagnostics
+// ─────────────────────────────────────────────────────────────────────
+
+interface BundleDiagnostic {
+  severity: 'info' | 'warn';
+  message: string;
+}
+
+/**
+ * Analyze bundle warnings and post-bundle state to produce actionable
+ * diagnostics for the user.
+ *
+ * Classifies Rolldown warnings into categories and suggests concrete
+ * actions (externalization, patch rules, etc.) where appropriate.
+ */
+function analyzeBundleDiagnostics(
+  warnings: BundleWarning[],
+  writeResult: WrittenBundle,
+  appliedPatches: string[],
+  userExternals: string[],
+): BundleDiagnostic[] {
+  const diagnostics: BundleDiagnostic[] = [];
+
+  // ── Classify warnings ──
+  const unresolvedImports: string[] = [];
+  const dynamicImports: string[] = [];
+  const otherWarnings: string[] = [];
+
+  for (const w of warnings) {
+    const msg = w.message;
+    if (/unresolved|not found|Could not resolve/i.test(msg)) {
+      // Extract package name from common warning formats
+      const pkgMatch = msg.match(/['"]([^'"]+)['"]/);
+      if (pkgMatch) unresolvedImports.push(pkgMatch[1]);
+    } else if (/dynamic/i.test(msg) && /import/i.test(msg)) {
+      dynamicImports.push(w.file ? path.basename(w.file) : 'unknown');
+    } else {
+      otherWarnings.push(msg);
+    }
+  }
+
+  // Deduplicate
+  const uniqueUnresolved = [...new Set(unresolvedImports)];
+  const uniqueDynamic = [...new Set(dynamicImports)];
+
+  // ── Unresolved imports ──
+  if (uniqueUnresolved.length > 0) {
+    // Separate bun:* and other runtime-specific from real missing packages
+    const runtimeSpecific = uniqueUnresolved.filter(p =>
+      p.startsWith('bun:') || p.startsWith('deno:')
+    );
+    const realMissing = uniqueUnresolved.filter(p =>
+      !p.startsWith('bun:') && !p.startsWith('deno:') && !p.startsWith('node:')
+    );
+
+    if (runtimeSpecific.length > 0) {
+      diagnostics.push({
+        severity: 'info',
+        message: `[bundle] Runtime-specific imports skipped: ${runtimeSpecific.join(', ')} (stubbed at runtime)`,
+      });
+    }
+
+    if (realMissing.length > 0) {
+      diagnostics.push({
+        severity: 'warn',
+        message: `[bundle] Unresolved packages: ${realMissing.join(', ')}. ` +
+          `If these are optional, use --external ${realMissing.map(p => `"${p}"`).join(' --external ')}`,
+      });
+    }
+  }
+
+  // ── Dynamic imports ──
+  if (uniqueDynamic.length > 0) {
+    diagnostics.push({
+      severity: 'warn',
+      message: `[bundle] Dynamic import() with variable arguments in ${uniqueDynamic.length} location(s). ` +
+        `Hakobu cannot trace these statically — the imported modules must be available at runtime.`,
+    });
+  }
+
+  // ── Applied patches summary ──
+  if (appliedPatches.length > 0) {
+    const scopes = [...new Set(appliedPatches.map(p => p.split(':')[0].trim()))];
+    diagnostics.push({
+      severity: 'info',
+      message: `[bundle] Compatibility patches applied for: ${scopes.join(', ')} (handled automatically)`,
+    });
+  }
+
+  // ── Per-chunk injection summary ──
+  if (writeResult.injectedChunks && writeResult.injectedChunks.length > 0) {
+    diagnostics.push({
+      severity: 'info',
+      message: `[bundle] __dirname/__filename polyfill injected into: ${writeResult.injectedChunks.join(', ')} (CJS-origin code)`,
+    });
+  }
+
+  // ── Other unclassified warnings ──
+  for (const msg of otherWarnings) {
+    diagnostics.push({
+      severity: 'warn',
+      message: `[bundle] ${msg}`,
+    });
+  }
+
+  // ── Summary line ──
+  const issueCount = diagnostics.filter(d => d.severity === 'warn').length;
+  if (issueCount === 0 && diagnostics.length > 0) {
+    diagnostics.push({
+      severity: 'info',
+      message: `[bundle] All detected patterns handled — no user action needed`,
+    });
+  }
+
+  return diagnostics;
 }
 
 // ─────────────────────────────────────────────────────────────────────
