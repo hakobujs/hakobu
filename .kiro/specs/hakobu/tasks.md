@@ -800,11 +800,21 @@
     - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
       `docs/migration-from-pkg.md`, `docs/runtime-support.md`
 
-  - [ ] 27.2 Wire V8 flags baking through new CLI/packager
-    - Expose `--options "expose-gc,max-heap-size=34"` in the new CLI
-    - Pass the bakes array through to the existing producer
-    - Verify baked flags are active at runtime in the packaged executable
+  - [x] 27.2 Wire V8 flags baking through new CLI/packager
+    - Wired `--options "expose-gc,max-heap-size=34"` through the new CLI
+    - Added `options` to `HakobuConfig`, `PackageOptions`,
+      `PackageMultipleOptions`
+    - Normalized CLI input: comma-separated string → array of `--`-prefixed
+      flags. Config accepts array directly.
+    - Passed bakes array through to existing producer in both packaging
+      paths
+    - Removed `--options` from unsupported-flag rejection
+    - Verified: `--expose-gc` makes `global.gc` available at runtime,
+      `process.execArgv` shows the baked flags, multiple flags work
+    - Updated `docs/migration-from-pkg.md` and `docs/runtime-support.md`
     - _Depends on: 10.1_
+    - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
+      `docs/migration-from-pkg.md`, `docs/runtime-support.md`
 
   - [ ] 27.3 Wire debug/verbose mode through new CLI/packager
     - Expose `--debug` / `-d` in the new `bin.ts` CLI

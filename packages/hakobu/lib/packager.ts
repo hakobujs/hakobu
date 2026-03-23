@@ -152,6 +152,13 @@ export interface PackageOptions {
    * 'brotli' or 'gzip'. Default: none (uncompressed).
    */
   compress?: 'brotli' | 'gzip';
+
+  /**
+   * V8 flags to bake into the executable.
+   * Comma-separated or array. Each flag is prefixed with '--' if needed.
+   * Example: 'expose-gc,max-heap-size=34' or ['--expose-gc']
+   */
+  options?: string[];
 }
 
 export interface PackageResult {
@@ -225,6 +232,7 @@ export interface PackageMultipleOptions {
   linux?: LinuxDesktopMetadata;
   appImage?: boolean;
   compress?: 'brotli' | 'gzip';
+  options?: string[];
 }
 
 export interface PackageMultipleResult {
@@ -470,7 +478,7 @@ async function packageAppForTarget(
     };
 
     await producer({
-      backpack, bakes: [], slash, target, symLinks,
+      backpack, bakes: options.options || [], slash, target, symLinks,
       doCompress: resolveCompressType(options.compress), nativeBuild: false,
     });
 
@@ -778,7 +786,7 @@ async function packageAppInner(
 
     await producer({
       backpack,
-      bakes: [],
+      bakes: options.options || [],
       slash,
       target,
       symLinks,

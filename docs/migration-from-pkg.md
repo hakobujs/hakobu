@@ -80,7 +80,7 @@ If both `"hakobu"` and `"pkg"` fields exist, `"hakobu"` takes priority and
 | `--compress` | `--compress` | Same. Supports Brotli and GZip. |
 | `--public` | Not needed | Hakobu always includes source. |
 | `--sea` | Not supported | Hakobu uses its own snapshot format. |
-| `--options` | Not supported | V8 flag baking is not yet available. |
+| `--options` | `--options` | Same. Comma-separated V8 flags baked into the executable. |
 | `--build` | Not supported | Base binaries are fetched from releases. |
 | `--no-native-build` | Not needed | Hakobu does not prebuild native addons. |
 | `--no-dict` | Not supported | Dictionaries are not used. |

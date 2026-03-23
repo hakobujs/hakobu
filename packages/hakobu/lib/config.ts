@@ -107,6 +107,13 @@ export interface HakobuConfig {
   compress?: 'brotli' | 'gzip';
 
   /**
+   * V8 flags to bake into the executable.
+   * Array of flag strings, each prefixed with '--'.
+   * Example: ["--expose-gc", "--max-heap-size=34"]
+   */
+  options?: string[];
+
+  /**
    * Linux desktop metadata for .desktop file generation.
    * Only used when appDir is true.
    */
@@ -250,7 +257,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
   checkUnsupportedCliFlag(args, 'public', warnings);
   checkUnsupportedCliFlag(args, 'public-packages', warnings);
   checkUnsupportedCliFlag(args, 'sea', warnings);
-  checkUnsupportedCliFlag(args, 'options', warnings);
+  // options is now supported — V8 flags baking (handled in normalization below)
   checkUnsupportedCliFlag(args, 'no-native-build', warnings);
   checkUnsupportedCliFlag(args, 'no-dict', warnings);
   checkUnsupportedCliFlag(args, 'build', warnings);
@@ -343,6 +350,19 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
     compress = hakobuConfig?.compress;
   }
 
+  // V8 baked options — CLI --options overrides config
+  let v8Options: string[] | undefined;
+  if (args.options) {
+    v8Options = String(args.options)
+      .split(',')
+      .filter(Boolean)
+      .map(flag => flag.startsWith('--') ? flag : `--${flag}`);
+  } else if (hakobuConfig?.options) {
+    v8Options = hakobuConfig.options.map(
+      (flag: string) => flag.startsWith('--') ? flag : `--${flag}`
+    );
+  }
+
   // Metadata — from "hakobu.metadata" in package.json
   const metadata = hakobuConfig?.metadata;
 
@@ -364,6 +384,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       appImage: hakobuConfig?.appImage,
       linux: hakobuConfig?.linux,
       compress,
+      options: v8Options,
     },
     warnings,
   };
@@ -471,7 +492,7 @@ function checkUnsupportedCliFlag(
       'public': '--public is not supported. Hakobu always includes source.',
       'public-packages': '--public-packages is not supported. Hakobu always includes source.',
       'sea': '--sea is not supported. Hakobu uses its own snapshot format, not Node SEA.',
-      'options': '--options (V8 flags) is not supported yet.',
+      // options is now supported — handled in normalization above
       'no-native-build': '--no-native-build is not needed. Hakobu does not prebuild native addons by default.',
       'no-dict': '--no-dict is not supported. Hakobu does not use dictionaries.',
       'build': '--build (force local build) is not supported via the Hakobu CLI. Base binaries are fetched from releases.',
