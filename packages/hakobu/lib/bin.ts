@@ -40,6 +40,7 @@ Advanced:
   --bytecode          Compile JS to V8 bytecode before packaging
   --compress <algo>   Compress snapshot payload (Brotli or GZip)
   --options <flags>   Bake V8 flags into executable (comma-separated)
+  --build, -b         Force local build of base binary (skip download)
                       Example: --options "expose-gc,max-heap-size=34"
   --app-bundle        Wrap macOS output in a .app bundle (macOS only)
                       Output path becomes the .app directory
@@ -276,6 +277,7 @@ async function main() {
           appImage: options.appImage,
           compress: options.compress,
           options: options.options,
+          forceBuild: options.forceBuild,
         });
         const failed = results.filter(r => r.status === 'failed');
         if (failed.length > 0) process.exit(1);

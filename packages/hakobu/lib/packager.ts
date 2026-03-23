@@ -154,6 +154,12 @@ export interface PackageOptions {
   compress?: 'brotli' | 'gzip';
 
   /**
+   * Force local build of base binaries instead of downloading
+   * prebuilt releases.
+   */
+  forceBuild?: boolean;
+
+  /**
    * V8 flags to bake into the executable.
    * Comma-separated or array. Each flag is prefixed with '--' if needed.
    * Example: 'expose-gc,max-heap-size=34' or ['--expose-gc']
@@ -233,6 +239,7 @@ export interface PackageMultipleOptions {
   appImage?: boolean;
   compress?: 'brotli' | 'gzip';
   options?: string[];
+  forceBuild?: boolean;
 }
 
 export interface PackageMultipleResult {
@@ -335,7 +342,7 @@ export async function packageMultiple(
   log.info(`\nFetching ${parsedTargets.length} base binaries...`);
   const fetchResults = await Promise.allSettled(
     parsedTargets.map(t =>
-      need({ nodeRange: t.nodeRange, platform: t.platform, arch: t.arch })
+      need({ nodeRange: t.nodeRange, platform: t.platform, arch: t.arch, forceBuild: options.forceBuild })
         .then(binaryPath => {
           log.info(`  fetched: ${t.platform}-${t.arch}`);
           return binaryPath;
@@ -440,6 +447,7 @@ async function packageAppForTarget(
     nodeRange: targetSpec.nodeRange,
     platform: targetSpec.platform,
     arch: targetSpec.arch,
+    forceBuild: options.forceBuild,
   });
 
   const preparedBase = prepareBaseBinary(targetSpec, binaryPath);
@@ -744,6 +752,7 @@ async function packageAppInner(
     nodeRange: targetSpec.nodeRange,
     platform: targetSpec.platform,
     arch: targetSpec.arch,
+    forceBuild: options.forceBuild,
   });
 
   log.info(`  base: ${binaryPath}`);

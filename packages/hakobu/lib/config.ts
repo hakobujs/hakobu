@@ -260,7 +260,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
   // options is now supported — V8 flags baking (handled in normalization below)
   checkUnsupportedCliFlag(args, 'no-native-build', warnings);
   checkUnsupportedCliFlag(args, 'no-dict', warnings);
-  checkUnsupportedCliFlag(args, 'build', warnings);
+  // build is now supported — force local base binary build
 
   // ── Handle legacy --out-path / --outdir ──
   let legacyOutputPath: string | undefined;
@@ -385,6 +385,7 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       linux: hakobuConfig?.linux,
       compress,
       options: v8Options,
+      forceBuild: args.build === true ? true : undefined,
     },
     warnings,
   };
@@ -495,7 +496,7 @@ function checkUnsupportedCliFlag(
       // options is now supported — handled in normalization above
       'no-native-build': '--no-native-build is not needed. Hakobu does not prebuild native addons by default.',
       'no-dict': '--no-dict is not supported. Hakobu does not use dictionaries.',
-      'build': '--build (force local build) is not supported via the Hakobu CLI. Base binaries are fetched from releases.',
+      // build is now supported — handled in normalization
     };
     warnings.push({
       type: 'unsupported',

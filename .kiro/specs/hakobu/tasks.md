@@ -831,11 +831,19 @@
     - _Depends on: 10.1_
     - **Output:** `bin.ts`, `packager.ts`, `docs/migration-from-pkg.md`
 
-  - [ ] 27.4 Wire force-build through new CLI/fetch
-    - Expose `--build` / `-b` in the new CLI
-    - Pass `forceBuild` through to `hakobu-fetch` `need()` calls
-    - Verify local base-binary compilation is triggered
+  - [x] 27.4 Wire force-build through new CLI/fetch
+    - Wired `--build` / `-b` through the new CLI/config/packager path
+    - Added `forceBuild` to `PackageOptions` and `PackageMultipleOptions`
+    - Passed `forceBuild` to all three `need()` call sites (single,
+      multi-target parallel, and inner packager)
+    - Removed `--build` from unsupported-flag rejection
+    - Verified: `--build` skips download/hash-check path, shows
+      "Reusing base binaries built locally", uses `built-*` cache path
+    - Default (no `--build`) unchanged — uses fetched/cached path
+    - Updated `docs/migration-from-pkg.md`
     - _Depends on: 10.1_
+    - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
+      `docs/migration-from-pkg.md`
 
   - [ ] 27.5 Add win-arm64 target support
     - Build a patched Node 24 base binary for Windows ARM64
