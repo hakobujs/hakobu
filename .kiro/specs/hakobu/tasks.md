@@ -730,7 +730,7 @@
     - _Depends on: 25.2_
     - **Output:** `fixtures/test-appdir.js`
 
-- [ ] 26. Bundle code-split quality improvements
+- [x] 26. Bundle code-split quality improvements
   - [x] 26.1 Inject per-chunk `__dirname`/`__filename` for split chunks
     - Replaced single-chunk fallback with per-chunk polyfill injection:
       `injectPathGlobalsPerChunk()` scans each emitted chunk with the
@@ -769,8 +769,16 @@
     - _Depends on: 26.1_
     - **Output:** `bundler.ts`, `docs/bundle-mode.md`
 
-  - [ ] 26.3 Add code-split fixture with `__dirname`-using dependency
-    - Create a fixture that exercises code-splitting with a dependency
-      that uses `__dirname` (simulating the Playwright pattern)
-    - Verify that code-splitting is preserved after per-chunk injection
+  - [x] 26.3 Add code-split fixture with `__dirname`-using dependency
+    - Created `fixtures/test-code-split.js` with inline TypeScript
+      fixture: entry dynamically imports a dependency that uses bare
+      `__dirname` (simulating Playwright/CJS-origin packages), plus
+      a shared utility imported by both
+    - 9 tests verify: code-split strategy preserved (not single-chunk),
+      multiple chunks emitted, __dirname polyfill injected only into
+      affected chunk, diagnostics confirm handling, executable runs,
+      entry works, dep with __dirname loaded correctly, shared utility
+      works, __dirname resolves to string
+    - Added to CI RC gate on macOS runner
     - _Depends on: 26.1_
+    - **Output:** `fixtures/test-code-split.js`, `.github/workflows/ci.yml`

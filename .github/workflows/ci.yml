@@ -184,6 +184,9 @@ jobs:
       - name: Multi-target verification
         run: node fixtures/test-multi-target.js
 
+      - name: Code-split bundle verification
+        run: node fixtures/test-code-split.js
+
       - name: App bundle verification
         run: node fixtures/test-app-bundle.js
 
