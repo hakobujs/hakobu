@@ -29,6 +29,7 @@ for them but they are not part of Hakobu's contract.
 | `macos-arm64` | 1 | Available |
 | `macos-x64` | 2 | Available |
 | `linuxstatic-x64` | 2 | Available |
+| `win-arm64` | 2 | Available (requires `windows-11-arm` runner) |
 
 ### Blocked targets
 

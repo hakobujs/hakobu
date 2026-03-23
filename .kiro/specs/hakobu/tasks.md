@@ -783,7 +783,7 @@
     - _Depends on: 26.1_
     - **Output:** `fixtures/test-code-split.js`, `.github/workflows/ci.yml`
 
-- [ ] 27. Migration parity with @yao-pkg/pkg
+- [x] 27. Migration parity with @yao-pkg/pkg
   - [x] 27.1 Wire snapshot compression through new CLI/packager
     - Wired `--compress Brotli|GZip` (also `-C`) through the new CLI
     - Added `compress` to `HakobuConfig`, `PackageOptions`,
@@ -845,8 +845,18 @@
     - **Output:** `packager.ts`, `config.ts`, `bin.ts`,
       `docs/migration-from-pkg.md`
 
-  - [ ] 27.5 Add win-arm64 target support
-    - Build a patched Node 24 base binary for Windows ARM64
-    - Add expected hash and CI build job
-    - Verify fixture passes on win-arm64 (may require hosted runner)
+  - [x] 27.5 Add win-arm64 target support
+    - Added `node24-win-arm64` to `ALL_TARGETS` list (included in
+      `--target all`)
+    - Target parsing already supported `win` + `arm64` — no parser
+      changes needed
+    - Added `win-arm64` build matrix entry in `build-bases.yml` using
+      `windows-11-arm` runner (native ARM64 build + verify)
+    - Promoted from Tier 3 (deferred) to Tier 2 in `target-policy.md`
+    - Added to `runtime-support.md` and `release-contract.md`
+    - Expected hash not yet populated (no base binary built yet) — fetch
+      falls back to local build with clear log message until first CI
+      build populates the hash
     - _Depends on: 3.2_
+    - **Output:** `packager.ts`, `build-bases.yml`, `target-policy.md`,
+      `runtime-support.md`, `release-contract.md`

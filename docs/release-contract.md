@@ -118,6 +118,7 @@ bases/node-v24.14.0/
 ├── hakobu-base-v24.14.0-linux-x64
 ├── hakobu-base-v24.14.0-linux-arm64
 ├── hakobu-base-v24.14.0-win-x64
+├── hakobu-base-v24.14.0-win-arm64          (Tier 2)
 ├── hakobu-base-v24.14.0-macos-arm64
 ├── hakobu-base-v24.14.0-macos-x64          (Tier 2)
 ├── hakobu-base-v24.14.0-linuxstatic-x64    (Tier 2)

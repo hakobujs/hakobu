@@ -75,6 +75,7 @@ the failure indicates a regression.
 | `macos-x64`         | native (Rosetta) | native on Intel or Rosetta | `macos-13` or `macos-latest` |
 | `linuxstatic-x64`   | Docker           | Docker                | `ubuntu-latest`   |
 | `linuxstatic-arm64` | Docker + cross   | Docker + qemu         | `ubuntu-latest`   |
+| `win-arm64`         | native           | native                | `windows-11-arm`  |
 
 **`linuxstatic-arm64` alpha status: blocked.** The `muslcc/x86_64:aarch64-linux-musl`
 cross-compiler ships a GCC version that cannot compile Node 24's `deps/ada/ada.h`
@@ -97,7 +98,6 @@ cycle. They may be promoted in future releases.
 
 | Target           | Reason for Deferral                                     |
 | ---------------- | ------------------------------------------------------- |
-| `win-arm64`      | limited runner availability; unclear demand signal       |
 | `alpine-x64`    | `linuxstatic` covers most musl use cases                |
 | `alpine-arm64`  | `linuxstatic` covers most musl use cases                |
 | `linux-armv7`   | legacy 32-bit ARM; low demand for Node 24 executables   |
