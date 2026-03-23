@@ -311,7 +311,8 @@ function resolveRelative(specifier: string, fromDir: string): string | null {
 function resolvePackage(
   specifier: string,
   fromFile: string,
-  warnings: ManifestWarning[]
+  warnings: ManifestWarning[],
+  conditions: string[] = CJS_CONDITIONS,
 ): string | null {
   const pkgName = specifier.startsWith('@')
     ? specifier.split('/').slice(0, 2).join('/')
@@ -334,7 +335,7 @@ function resolvePackage(
       // "main" is ignored for bare specifiers.
       if (hasExports) {
         const normalizedSubpath = '.' + specifier.slice(pkgName.length);
-        const exportsResult = resolveExports(pj!.exports, normalizedSubpath, ESM_CONDITIONS);
+        const exportsResult = resolveExports(pj!.exports, normalizedSubpath, conditions);
         if (exportsResult && typeof exportsResult === 'string') {
           const resolved = resolveRelative(exportsResult, pkgDir);
           if (resolved) return resolved;
@@ -389,15 +390,19 @@ function resolvePackage(
 function resolveSpecifier(
   specifier: string,
   fromFile: string,
-  warnings: ManifestWarning[]
+  warnings: ManifestWarning[],
+  depKind: string = 'require',
 ): string | null {
   if (isBuiltin(specifier)) return null;
+
+  // Choose conditions based on caller context
+  const conditions = depKind === 'require' ? CJS_CONDITIONS : ESM_CONDITIONS;
 
   // #-prefixed package imports
   if (specifier.startsWith('#')) {
     const pj = findNearestPackageJson(path.dirname(fromFile));
     if (pj?.data.imports) {
-      const resolved = resolveImports(pj.data.imports, specifier, ESM_CONDITIONS);
+      const resolved = resolveImports(pj.data.imports, specifier, conditions);
       if (resolved && typeof resolved === 'string') {
         const pkgDir = path.dirname(pj.path);
         return resolveRelative(resolved, pkgDir);
@@ -417,7 +422,7 @@ function resolveSpecifier(
     return resolveRelative(specifier, path.dirname(fromFile));
   }
 
-  return resolvePackage(specifier, fromFile, warnings);
+  return resolvePackage(specifier, fromFile, warnings, conditions);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -632,7 +637,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
         continue;
       }
 
-      const resolved = resolveSpecifier(dep.specifier, absolutePath, warnings);
+      const resolved = resolveSpecifier(dep.specifier, absolutePath, warnings, dep.kind);
       if (resolved) {
         walkFile(resolved);
       }
@@ -722,7 +727,7 @@ function resolveExportsEntry(exports: unknown, projectRoot: string): string | nu
     // { ".": { "import": "...", "default": "..." } }
     if (typeof dotEntry === 'object' && dotEntry !== null) {
       const conditions = dotEntry as Record<string, unknown>;
-      for (const key of ['import', 'default', 'node', 'require']) {
+      for (const key of ['import', 'require', 'node', 'default']) {
         if (typeof conditions[key] === 'string') {
           const resolved = path.resolve(projectRoot, conditions[key] as string);
           if (fs.existsSync(resolved)) return resolved;

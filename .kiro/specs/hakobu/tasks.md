@@ -860,3 +860,46 @@
     - _Depends on: 3.2_
     - **Output:** `packager.ts`, `build-bases.yml`, `target-policy.md`,
       `runtime-support.md`, `release-contract.md`
+
+- [ ] 28. Package ecosystem compatibility
+  - [x] 28.1 Add conditional exports fixture and fix condition resolution
+    - Created `fixtures/conditional-exports/` with a vendored dependency
+      using conditional exports: `{ "import": esm.mjs, "require": cjs.cjs,
+      "default": default.js }` for both `"."` and `"./utils"` subpaths
+    - **Found and fixed a real bug**: the analyzer used `ESM_CONDITIONS`
+      (import, node, default) for ALL resolutions, even `require()` calls.
+      This caused CJS files to resolve to ESM entry points, breaking
+      packages like chalk, execa, strip-ansi in packaged executables.
+    - Fix: `resolveSpecifier` and `resolvePackage` now accept the caller's
+      dep kind and use `CJS_CONDITIONS` for `require()`, `ESM_CONDITIONS`
+      for `import`
+    - Fixture verifies: main condition = "require", utils condition =
+      "require", function execution, require.resolve, resolved path is .cjs
+    - Both node and packaged pass (2/2)
+    - _Depends on: 12.1_
+    - **Output:** `fixtures/conditional-exports/`, `analyzer.ts`
+
+  - [ ] 28.2 Add scoped package and nested dependency fixture
+    - Create a fixture with `@scope/package` resolution and a dependency
+      tree with at least one transitive dep (A → B → C)
+    - Verify scoped resolution, transitive require, and deduplication
+    - _Depends on: 22.1_
+
+  - [ ] 28.3 Add CJS-consuming-ESM dependency fixture
+    - Create a fixture where a CJS entry uses `createRequire` or
+      `import()` to load an ESM-only dependency
+    - Verify the mixed module-system chain works in packaged execution
+    - _Depends on: 12.1_
+
+  - [ ] 28.4 Harden bundle-mode workspace dependency resolution
+    - Test bundle mode with workspace protocol dependencies
+      (`workspace:*`) using a minimal monorepo fixture
+    - Verify Rolldown resolves workspace deps correctly and the
+      packaged output runs
+    - _Depends on: 16.1_
+
+  - [ ] 28.5 Add pattern subpath exports fixture
+    - Create a fixture with `"exports": { "./*": "./src/*.js" }` style
+      pattern subpaths
+    - Verify wildcard subpath resolution works in packaged execution
+    - _Depends on: 28.1_
