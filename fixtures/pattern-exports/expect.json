@@ -1,0 +1,14 @@
+{
+  "format": "pattern-exports",
+  "main_loaded": true,
+  "main_name": "pattern-dep",
+  "main_version": "1.0.0",
+  "utils_loaded": true,
+  "utils_module": "utils",
+  "utils_result": 42,
+  "math_loaded": true,
+  "math_module": "math",
+  "math_result": 42,
+  "resolve_utils": true,
+  "resolve_math": true
+}

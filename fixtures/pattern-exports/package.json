@@ -1,0 +1,8 @@
+{
+  "name": "fixture-pattern-exports",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "pattern-dep": "*"
+  }
+}

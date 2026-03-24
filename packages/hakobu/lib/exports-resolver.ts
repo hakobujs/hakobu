@@ -101,8 +101,10 @@ export function resolveExports(
     const prefix = pattern.slice(0, starIndex);
     const suffix = pattern.slice(starIndex + 1);
 
-    if (subpath.startsWith(prefix) && subpath.endsWith(suffix)) {
-      const matched = subpath.slice(prefix.length, subpath.length - (suffix.length || Infinity));
+    if (subpath.startsWith(prefix) && (suffix === '' || subpath.endsWith(suffix))) {
+      const matched = suffix
+        ? subpath.slice(prefix.length, subpath.length - suffix.length)
+        : subpath.slice(prefix.length);
       const target = resolveTarget(map[key], conditions);
       if (target && typeof target === 'string') {
         return target.replace('*', matched);
@@ -148,8 +150,10 @@ export function resolveImports(
     const prefix = key.slice(0, starIndex);
     const suffix = key.slice(starIndex + 1);
 
-    if (specifier.startsWith(prefix) && specifier.endsWith(suffix)) {
-      const matched = specifier.slice(prefix.length, specifier.length - (suffix.length || Infinity));
+    if (specifier.startsWith(prefix) && (suffix === '' || specifier.endsWith(suffix))) {
+      const matched = suffix
+        ? specifier.slice(prefix.length, specifier.length - suffix.length)
+        : specifier.slice(prefix.length);
       const target = resolveTarget(map[key], conditions);
       if (target && typeof target === 'string') {
         return target.replace('*', matched);

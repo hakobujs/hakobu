@@ -861,7 +861,7 @@
     - **Output:** `packager.ts`, `build-bases.yml`, `target-policy.md`,
       `runtime-support.md`, `release-contract.md`
 
-- [ ] 28. Package ecosystem compatibility
+- [x] 28. Package ecosystem compatibility
   - [x] 28.1 Add conditional exports fixture and fix condition resolution
     - Created `fixtures/conditional-exports/` with a vendored dependency
       using conditional exports: `{ "import": esm.mjs, "require": cjs.cjs,
@@ -925,8 +925,21 @@
     - **Output:** `fixtures/workspace-bundle/`,
       `fixtures/test-workspace-bundle.js`
 
-  - [ ] 28.5 Add pattern subpath exports fixture
-    - Create a fixture with `"exports": { "./*": "./src/*.js" }` style
-      pattern subpaths
-    - Verify wildcard subpath resolution works in packaged execution
+  - [x] 28.5 Add pattern subpath exports fixture
+    - Created `fixtures/pattern-exports/` with a dependency using
+      `"exports": { ".": "./src/index.js", "./*": "./src/*.js" }`
+    - Consumer imports two pattern subpaths: `pattern-dep/utils` and
+      `pattern-dep/math`
+    - **Found and fixed a real bug**: pattern matching in
+      `exports-resolver.ts` used `suffix.length || Infinity` which
+      produced an empty `matched` string when suffix was `""` (the
+      common case for `./*` patterns). `require('pkg/utils')` through
+      `"./*": "./src/*.js"` would resolve to `"./src/.js"` instead of
+      `"./src/utils.js"`.
+    - Fix: when suffix is empty, use `subpath.slice(prefix.length)`
+      directly. Applied to both exports and imports pattern matchers.
+    - Fixture verifies: main exact export, two pattern subpath
+      resolutions, function execution, require.resolve (12 checks)
+    - Both node and packaged pass (2/2)
     - _Depends on: 28.1_
+    - **Output:** `fixtures/pattern-exports/`, `exports-resolver.ts`
