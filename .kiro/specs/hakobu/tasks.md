@@ -910,12 +910,20 @@
     - _Depends on: 12.1_
     - **Output:** `fixtures/cjs-imports-esm/`, `packager.ts`
 
-  - [ ] 28.4 Harden bundle-mode workspace dependency resolution
-    - Test bundle mode with workspace protocol dependencies
-      (`workspace:*`) using a minimal monorepo fixture
-    - Verify Rolldown resolves workspace deps correctly and the
-      packaged output runs
+  - [x] 28.4 Harden bundle-mode workspace dependency resolution
+    - Created `fixtures/workspace-bundle/` with a minimal monorepo:
+      `packages/app` (TS entry) → `@workspace/lib` (TS library,
+      symlinked via `workspace:*`)
+    - Added `fixtures/test-workspace-bundle.js` with 7 tests:
+      bundle succeeds, no unresolved workspace warnings, executable
+      runs, greet() works, add() works, constant accessible,
+      workspace resolution confirmed
+    - No resolver bugs found — Rolldown follows symlinks naturally,
+      inlines the workspace library TypeScript source into the bundle,
+      and the packaged executable runs correctly
     - _Depends on: 16.1_
+    - **Output:** `fixtures/workspace-bundle/`,
+      `fixtures/test-workspace-bundle.js`
 
   - [ ] 28.5 Add pattern subpath exports fixture
     - Create a fixture with `"exports": { "./*": "./src/*.js" }` style
