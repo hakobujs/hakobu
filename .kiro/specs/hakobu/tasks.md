@@ -892,11 +892,23 @@
     - _Depends on: 22.1_
     - **Output:** `fixtures/scoped-nested-deps/`
 
-  - [ ] 28.3 Add CJS-consuming-ESM dependency fixture
-    - Create a fixture where a CJS entry uses `createRequire` or
-      `import()` to load an ESM-only dependency
-    - Verify the mixed module-system chain works in packaged execution
+  - [x] 28.3 Add CJS-consuming-ESM dependency fixture
+    - Created `fixtures/cjs-imports-esm/` with a CJS entry that uses
+      dynamic `import()` to load an ESM-only dependency (`type: "module"`,
+      exports map, named + default exports) — the pattern required by
+      chalk v5, got v12, execa v7, p-limit v4, etc.
+    - **Found and fixed a real bug**: the ESM hooks shim was only injected
+      for ESM entries. CJS entries that use `import()` had no snapshot-
+      aware ESM resolver, causing `ERR_MODULE_NOT_FOUND` for packages
+      in the snapshot.
+    - Fix: always inject the ESM hooks shim as the entrypoint. For ESM
+      entries it `import()`s the real entry; for CJS entries it
+      `require()`s it. Both paths get snapshot-aware ESM resolution.
+    - Verified: all existing fixtures pass (pure-cjs, esm-basic,
+      mixed-cjs-esm, npm-dependency, conditional-exports, scoped-deps,
+      bytecode, source maps, multi-target)
     - _Depends on: 12.1_
+    - **Output:** `fixtures/cjs-imports-esm/`, `packager.ts`
 
   - [ ] 28.4 Harden bundle-mode workspace dependency resolution
     - Test bundle mode with workspace protocol dependencies

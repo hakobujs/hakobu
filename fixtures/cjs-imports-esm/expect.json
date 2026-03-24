@@ -1,0 +1,10 @@
+{
+  "format": "cjs-imports-esm",
+  "has_greet": true,
+  "has_version": true,
+  "version_value": "3.0.0",
+  "has_default": true,
+  "default_has_greet": true,
+  "greet_result": "Hello, hakobu!",
+  "path_works": true
+}

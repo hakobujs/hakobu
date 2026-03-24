@@ -983,27 +983,29 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
     }
   }
 
-  // For ESM entries, inject a CJS shim + hook source into the VFS
+  // Inject CJS shim that registers ESM hooks for snapshot-aware resolution.
+  // Always needed: CJS entries may use import() to load ESM dependencies,
+  // and ESM entries need the hooks for all import resolution.
   let entrypoint = manifest.entry.absolutePath;
 
-  if (isEsmEntry) {
-    const { shimPath, shimContent, shimDir } = buildEsmBridge(manifest);
-    records[shimPath] = {
-      file: shimPath,
-      body: shimContent,
-      [STORE_CONTENT]: shimContent,
-      [STORE_STAT]: {
-        size: shimContent.length,
-        isFileValue: true,
-        isDirectoryValue: false,
-        isSocketValue: false,
-        isSymbolicLinkValue: false,
-      },
-    };
-    entrypoint = shimPath;
+  const { shimPath, shimContent, shimDir } = buildEsmBridge(manifest, isEsmEntry);
+  records[shimPath] = {
+    file: shimPath,
+    body: shimContent,
+    [STORE_CONTENT]: shimContent,
+    [STORE_STAT]: {
+      size: shimContent.length,
+      isFileValue: true,
+      isDirectoryValue: false,
+      isSocketValue: false,
+      isSymbolicLinkValue: false,
+    },
+  };
+  entrypoint = shimPath;
 
-    // Add shim to its directory listing
-    if (!dirContents.has(shimDir)) dirContents.set(shimDir, []);
+  // Add shim to its directory listing
+  if (!dirContents.has(shimDir)) dirContents.set(shimDir, []);
+  if (!dirContents.get(shimDir)!.includes(path.basename(shimPath))) {
     dirContents.get(shimDir)!.push(path.basename(shimPath));
   }
 
@@ -1032,15 +1034,16 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Build a CJS shim that bootstraps ESM loading at runtime.
+ * Build a CJS shim that registers ESM hooks and loads the real entry.
  *
- * The inherited prelude only supports CJS (Module._load). For ESM entries,
- * we inject a CJS shim as the entrypoint that:
- *   1. Registers synchronous ESM hooks via module.registerHooks()
- *      (runs in main thread — the patched fs is available)
- *   2. Dynamically import()s the real ESM entry
+ * Always injected (not just for ESM entries) because CJS code may use
+ * import() to load ESM dependencies — those calls need the snapshot-aware
+ * ESM resolver hooks to be registered first.
+ *
+ * For ESM entries: registers hooks + import()s the real entry
+ * For CJS entries: registers hooks + require()s the real entry
  */
-function buildEsmBridge(manifest: PackagingManifest): {
+function buildEsmBridge(manifest: PackagingManifest, isEsm: boolean = true): {
   shimPath: string;
   shimContent: Buffer;
   shimDir: string;
@@ -1263,10 +1266,12 @@ registerHooks({
   }
 });
 
-// Import the real ESM entry (use canonicalToUrl for cross-platform snapshot URL)
+// Load the real entry
 var entryCanonical = '${snapshotify(entryAbsPath, '/').replace(/\\/g, '/')}';
-var entryUrl = canonicalToUrl(entryCanonical);
-import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });
+${isEsm
+  ? `var entryUrl = canonicalToUrl(entryCanonical);
+import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });`
+  : `require(toNative(entryCanonical));`}
 `;
 
   return {
