@@ -187,6 +187,8 @@ interface ExtractedDep {
   dynamic: boolean;
   /** 'require' | 'import' | 'import-dynamic' | 'export-from' */
   kind: string;
+  /** For dynamic requires: detected directory pattern (e.g., 'models') */
+  dirHint?: string;
 }
 
 function extractDependencies(filePath: string, format: ModuleFormat): ExtractedDep[] {
@@ -195,6 +197,38 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
     source = fs.readFileSync(filePath, 'utf8');
   } catch {
     return [];
+  }
+
+  /**
+   * Try to extract a directory hint from a dynamic require argument.
+   * Recognizes patterns like:
+   *   path.join(__dirname, 'models', variable)  → 'models'
+   *   __dirname + '/models/' + variable         → 'models'
+   */
+  function extractDirHint(node: any): string | undefined {
+    // path.join(__dirname, 'subdir', ...)
+    if (node.type === 'CallExpression' &&
+        node.callee?.type === 'MemberExpression' &&
+        node.callee.property?.name === 'join' &&
+        node.arguments?.length >= 3) {
+      const args = node.arguments;
+      if (args[0]?.type === 'Identifier' && args[0].name === '__dirname' &&
+          args[1]?.type === 'StringLiteral') {
+        return args[1].value;
+      }
+    }
+    // __dirname + '/subdir/' + ... (BinaryExpression with string concat)
+    if (node.type === 'BinaryExpression' && node.operator === '+') {
+      const left = node.left;
+      if (left?.type === 'BinaryExpression' && left.operator === '+') {
+        if (left.left?.type === 'Identifier' && left.left.name === '__dirname' &&
+            left.right?.type === 'StringLiteral') {
+          const dir = left.right.value.replace(/^\/|\/$/g, '');
+          if (dir) return dir;
+        }
+      }
+    }
+    return undefined;
   }
 
   const deps: ExtractedDep[] = [];
@@ -221,7 +255,9 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
           if (args[0].type === 'StringLiteral') {
             deps.push({ specifier: args[0].value, dynamic: false, kind: 'require' });
           } else {
-            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'require' });
+            // Try to extract directory hint from path.join(__dirname, 'subdir', variable)
+            const dirHint = extractDirHint(args[0]);
+            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'require', dirHint });
           }
         }
 
@@ -624,15 +660,23 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
       // ── Dynamic specifier diagnostics ──
       if (dep.dynamic) {
         const category: WarningCategory = dep.kind === 'require' ? 'dynamic-require' : 'dynamic-import';
+        let suggestion: string;
+        if (dep.dirHint && dep.kind === 'require') {
+          suggestion = `Detected directory pattern: "${dep.dirHint}". ` +
+            `Add to hakobu config: { "assets": ["${dep.dirHint}/**/*.js"] }`;
+        } else if (dep.kind === 'require') {
+          suggestion = `If the required module is known, add it to the assets list explicitly. ` +
+            `Example: { "hakobu": { "assets": ["path/to/module.js"] } }`;
+        } else {
+          suggestion = `If the imported module is known, add it as a static import or to the assets list.`;
+        }
         warnings.push(diag(
           'warning',
           category,
           `${dep.kind}() with non-literal argument in ${path.basename(absolutePath)}. ` +
           `Hakobu cannot trace dynamic ${dep.kind === 'require' ? 'require' : 'import'} targets statically.`,
           absolutePath,
-          dep.kind === 'require'
-            ? `If the required module is known, add it to the assets or scripts list explicitly.`
-            : `If the imported module is known, add it as a static import or to the scripts list.`,
+          suggestion,
         ));
         continue;
       }

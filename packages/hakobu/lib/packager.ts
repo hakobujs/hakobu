@@ -738,6 +738,9 @@ async function packageAppInner(
       } else if (w.severity === 'warning') {
         log.warn(`[${w.category}] ${w.message}`);
       }
+      if (w.suggestion) {
+        log.info(`  → ${w.suggestion}`);
+      }
     }
   }
 

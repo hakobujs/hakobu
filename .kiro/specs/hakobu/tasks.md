@@ -971,12 +971,23 @@
     - **Output:** `prelude/bootstrap.js`, `addon-extract.ts`,
       `docs/runtime-support.md`
 
-  - [ ] 29.3 Dynamic require hardening fixture and diagnostics
-    - Add fixture exercising `require(variable)` patterns with known
-      target files listed as assets
-    - Verify asset-declared dynamic requires resolve at runtime
-    - Improve diagnostics for unresolvable dynamic requires
+  - [x] 29.3 Dynamic require hardening fixture and diagnostics
+    - Created `fixtures/dynamic-require/` with a directory-driven model
+      loader pattern (Sequelize/Express style): `fs.readdirSync()` +
+      `require(path.join(__dirname, 'models', file))`
+    - Fixture uses `"hakobu": { "assets": ["models/**/*.js"] }` config to
+      declare the dynamically-required files — packaged execution works
+    - Enhanced analyzer to detect `path.join(__dirname, 'subdir', var)`
+      patterns in dynamic require args and extract the directory name
+    - Improved diagnostics: when a directory pattern is detected, the
+      warning now suggests the exact asset glob to add:
+      `→ Detected directory pattern: "plugins". Add to hakobu config:
+      { "assets": ["plugins/**/*.js"] }`
+    - Also surfaces suggestion text for all manifest warnings in the
+      packager output (previously suggestion was logged only at debug level)
+    - 2/2 fixture tests pass (node + packaged)
     - _Depends on: 12.1_
+    - **Output:** `fixtures/dynamic-require/`, `analyzer.ts`, `packager.ts`
 
   - [ ] 29.4 pkg-fetch `/lib` detection hardening for non-FHS systems
     - The base-binary build pipeline detects system libraries via

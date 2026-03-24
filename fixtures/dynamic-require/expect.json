@@ -1,0 +1,10 @@
+{
+  "format": "dynamic-require",
+  "model_count": 2,
+  "has_user": true,
+  "has_post": true,
+  "user_fields": 3,
+  "post_fields": 4,
+  "user_name": "User",
+  "post_name": "Post"
+}
