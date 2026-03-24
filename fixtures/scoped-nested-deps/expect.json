@@ -1,0 +1,11 @@
+{
+  "format": "scoped-nested-deps",
+  "scoped_loaded": true,
+  "scoped_version": "2.0.0",
+  "add_result": 42,
+  "multiply_result": 42,
+  "transitive_version": "1.5.0",
+  "validate_nan": true,
+  "resolve_scoped": true,
+  "resolve_transitive": true
+}

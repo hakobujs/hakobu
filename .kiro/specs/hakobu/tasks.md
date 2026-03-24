@@ -879,11 +879,18 @@
     - _Depends on: 12.1_
     - **Output:** `fixtures/conditional-exports/`, `analyzer.ts`
 
-  - [ ] 28.2 Add scoped package and nested dependency fixture
-    - Create a fixture with `@scope/package` resolution and a dependency
-      tree with at least one transitive dep (A → B → C)
-    - Verify scoped resolution, transitive require, and deduplication
+  - [x] 28.2 Add scoped package and nested dependency fixture
+    - Created `fixtures/scoped-nested-deps/` with:
+      - Entry → `@test/math` (scoped package with `lib/` main)
+      - `@test/math` → `shared-utils` (transitive dependency)
+    - Verifies: scoped package loads, transitive require resolves,
+      functions execute across the dependency chain, require.resolve
+      works for both levels, invalid input validation via transitive dep
+    - No resolver bugs found — scoped packages and transitive deps
+      already work correctly through the existing node_modules walk
+    - Both node and packaged pass (2/2)
     - _Depends on: 22.1_
+    - **Output:** `fixtures/scoped-nested-deps/`
 
   - [ ] 28.3 Add CJS-consuming-ESM dependency fixture
     - Create a fixture where a CJS entry uses `createRequire` or

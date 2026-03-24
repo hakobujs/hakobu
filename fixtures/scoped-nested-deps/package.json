@@ -1,0 +1,8 @@
+{
+  "name": "fixture-scoped-nested-deps",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "@test/math": "*"
+  }
+}
