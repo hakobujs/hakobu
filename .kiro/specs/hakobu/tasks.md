@@ -957,11 +957,19 @@
     - _Depends on: 9.1_
     - **Output:** `prelude/bootstrap.js`, `fixtures/test-exit-cleanup.js`
 
-  - [ ] 29.2 Harden native addon cache path (no-home fallback)
-    - If `$HOME` / `os.homedir()` is unset or unwritable, the native
-      addon extraction cache at `~/.cache/pkg/` will crash
-    - Fall back to os.tmpdir() or HAKOBU_ADDON_CACHE env var
+  - [x] 29.2 Harden native addon cache path (no-home fallback)
+    - Updated prelude `process.dlopen` patch: cache base now resolves
+      HAKOBU_ADDON_CACHE → PKG_NATIVE_CACHE_PATH → $HOME/.cache →
+      os.tmpdir() with try/catch around homedir()
+    - Updated `addon-extract.ts`: getAddonCacheDir() now resolves
+      HAKOBU_ADDON_CACHE → $HOME/.hakobu/addons → os.tmpdir()/hakobu-addons
+      with try/catch around os.homedir()
+    - Packaged apps no longer crash when $HOME is unset (service users,
+      containers, no-home environments)
+    - Updated `docs/runtime-support.md` with cache path resolution table
     - _Depends on: 29.1_
+    - **Output:** `prelude/bootstrap.js`, `addon-extract.ts`,
+      `docs/runtime-support.md`
 
   - [ ] 29.3 Dynamic require hardening fixture and diagnostics
     - Add fixture exercising `require(variable)` patterns with known

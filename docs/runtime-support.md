@@ -106,7 +106,18 @@ instead.
 - At runtime, addons are extracted from the snapshot to
   `~/.hakobu/addons/{sha256}/{filename}.node` and loaded via `process.dlopen`
 - Extraction is idempotent and cache-friendly
-- The cache location is configurable via `HAKOBU_ADDON_CACHE`
+
+**Cache path resolution** (in priority order):
+
+| Source | Example |
+|--------|---------|
+| `HAKOBU_ADDON_CACHE` env var | `/opt/myapp/addon-cache` |
+| `PKG_NATIVE_CACHE_PATH` env var (legacy compat) | `/opt/myapp/cache` |
+| `$HOME/.cache` (prelude) / `$HOME/.hakobu/addons` (new path) | `/home/user/.cache/pkg/<hash>` |
+| `os.tmpdir()` (fallback when home is unavailable) | `/tmp/hakobu-addons/<hash>` |
+
+This means packaged apps work correctly for service users (`nobody`,
+`www-data`) and in containers where `$HOME` may not exist.
 
 **Known limitation:** native addons must be compiled for the target platform
 before packaging. Cross-compilation of `.node` files is not handled by Hakobu.

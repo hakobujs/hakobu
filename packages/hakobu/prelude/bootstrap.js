@@ -2177,14 +2177,27 @@ function payloadFileSync(pointer) {
     dlopen: process.dlopen,
   };
 
-  // Allow users to override the cache base directory via PKG_NATIVE_CACHE_PATH environment variable
-  // Default: path.join(homedir(), '.cache')
-  //   - Linux/macOS: /home/john/.cache or /Users/john/.cache
-  //   - Windows: C:\Users\John\.cache
-  // Custom example: /opt/myapp/cache or C:\myapp\cache
-  // Native addons will be extracted to: <PKG_NATIVE_CACHE_BASE>/pkg/<hash>
-  const PKG_NATIVE_CACHE_BASE =
-    process.env.PKG_NATIVE_CACHE_PATH || path.join(homedir(), '.cache');
+  // Native addon cache base directory.
+  // Resolution order:
+  //   1. HAKOBU_ADDON_CACHE env var (modern)
+  //   2. PKG_NATIVE_CACHE_PATH env var (legacy compat)
+  //   3. $HOME/.cache (default)
+  //   4. os.tmpdir() (fallback when home is unavailable/unwritable)
+  // Native addons will be extracted to: <base>/pkg/<hash>
+  function resolveNativeCacheBase() {
+    if (process.env.HAKOBU_ADDON_CACHE) return process.env.HAKOBU_ADDON_CACHE;
+    if (process.env.PKG_NATIVE_CACHE_PATH) return process.env.PKG_NATIVE_CACHE_PATH;
+    try {
+      var home = homedir();
+      if (home) {
+        var cachePath = path.join(home, '.cache');
+        fs.mkdirSync(cachePath, { recursive: true });
+        return cachePath;
+      }
+    } catch (e) { /* home unavailable or unwritable */ }
+    return os.tmpdir();
+  }
+  const PKG_NATIVE_CACHE_BASE = resolveNativeCacheBase();
 
   function revertMakingLong(f) {
     if (/^\\\\\?\\/.test(f)) return f.slice(4);

@@ -36,14 +36,25 @@ import { addonExtractionFailed } from './runtime-diagnostics';
 // Cache directory
 // ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_CACHE_DIR = path.join(os.homedir(), '.hakobu', 'addons');
-
 /**
  * Get the addon extraction cache directory.
- * Configurable via HAKOBU_ADDON_CACHE env var.
+ *
+ * Resolution order:
+ *   1. HAKOBU_ADDON_CACHE env var
+ *   2. $HOME/.hakobu/addons (default)
+ *   3. os.tmpdir()/hakobu-addons (fallback when home unavailable)
  */
 export function getAddonCacheDir(): string {
-  return process.env.HAKOBU_ADDON_CACHE || DEFAULT_CACHE_DIR;
+  if (process.env.HAKOBU_ADDON_CACHE) {
+    return process.env.HAKOBU_ADDON_CACHE;
+  }
+  try {
+    const home = os.homedir();
+    if (home) {
+      return path.join(home, '.hakobu', 'addons');
+    }
+  } catch { /* home unavailable */ }
+  return path.join(os.tmpdir(), 'hakobu-addons');
 }
 
 // ─────────────────────────────────────────────────────────────────────
