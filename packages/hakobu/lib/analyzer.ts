@@ -702,14 +702,38 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
         // Direct file path
         addFile(assetPath, 'asset');
       } else {
-        // Try as glob using tinyglobby
+        // Try as glob using tinyglobby.
+        // When the pattern or cwd contains glob-special characters
+        // (brackets, parens, etc.), we resolve the directory prefix
+        // first and glob from within it to avoid misinterpretation.
         try {
           const { globSync } = require('tinyglobby');
-          const matches = globSync(pattern, { cwd: projectRoot, absolute: true });
-          for (const match of matches) {
-            if (fs.statSync(match).isFile()) {
-              addFile(match, 'asset');
+
+          // Extract the directory prefix from the pattern (e.g., "models/**" → "models")
+          const firstWild = pattern.search(/[*?{]/);
+          let globCwd = projectRoot;
+          let globPattern = pattern;
+
+          if (firstWild > 0) {
+            const prefix = pattern.slice(0, firstWild);
+            const lastSep = prefix.lastIndexOf('/');
+            if (lastSep >= 0) {
+              const dirPrefix = prefix.slice(0, lastSep);
+              const resolvedDir = path.resolve(projectRoot, dirPrefix);
+              if (fs.existsSync(resolvedDir) && fs.statSync(resolvedDir).isDirectory()) {
+                globCwd = resolvedDir;
+                globPattern = pattern.slice(lastSep + 1);
+              }
             }
+          }
+
+          const matches = globSync(globPattern, { cwd: globCwd, absolute: true });
+          for (const match of matches) {
+            try {
+              if (fs.statSync(match).isFile()) {
+                addFile(match, 'asset');
+              }
+            } catch {}
           }
         } catch {}
       }

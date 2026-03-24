@@ -998,10 +998,21 @@
     - _Depends on: 3.1_
     - **Output:** `packages/hakobu-fetch/lib/system.ts`
 
-  - [ ] 29.5 Asset glob handling with spaces/special chars in paths
-    - Verify and fix asset glob resolution when cwd or file paths
-      contain spaces, parentheses, or Unicode characters
+  - [x] 29.5 Asset glob handling with spaces/special chars in paths
+    - **Bug**: asset glob patterns like `data (files)/**` failed
+      silently when the pattern or project path contained glob-special
+      characters (`[`, `]`, `(`, `)`) — tinyglobby interpreted them
+      as character classes / group patterns instead of literal paths
+    - **Fix**: before globbing, extract the literal directory prefix
+      from the pattern (before the first `*`/`?`/`{`), resolve it to
+      an absolute path, and use it as the glob `cwd`. This keeps
+      special chars in the `cwd` (which tinyglobby treats literally)
+      and leaves only the wildcard pattern for interpretation.
+    - Verified: asset patterns with parentheses, brackets, and spaces
+      in both the project path and pattern name now resolve correctly
+    - Normal paths unchanged — all existing fixtures pass
     - _Depends on: 12.1_
+    - **Output:** `packages/hakobu/lib/analyzer.ts`
 
   - [ ] 29.6 Hard native package fixtures (sharp, drivelist)
     - Add fixtures or integration tests for native packages known to
