@@ -944,7 +944,7 @@
     - _Depends on: 28.1_
     - **Output:** `fixtures/pattern-exports/`, `exports-resolver.ts`
 
-- [ ] 29. Runtime compatibility and hardening
+- [x] 29. Runtime compatibility and hardening
   - [x] 29.1 Fix native addon temp cleanup on hard exit
     - Changed `process.on('beforeExit', ...)` to `process.on('exit', ...)`
       in `prelude/bootstrap.js` — `beforeExit` does not fire on
@@ -1014,9 +1014,20 @@
     - _Depends on: 12.1_
     - **Output:** `packages/hakobu/lib/analyzer.ts`
 
-  - [ ] 29.6 Hard native package fixtures (sharp, drivelist)
-    - Add fixtures or integration tests for native packages known to
-      be problematic: sharp (prebuild extraction), drivelist (build
-      from source), etc.
-    - Fix any extraction/dlopen/path issues exposed
+  - [x] 29.6 Hard native package fixtures (sharp, drivelist)
+    - Created `fixtures/native-prebuild/` simulating the sharp/drivelist
+      pattern: `.node` addon in `build/Release/`, sibling vendor files,
+      JS wrapper using `require()` + `fs.readFileSync()` for runtime data
+    - **Found and fixed a real bug**: the analyzer only included the
+      `.node` file from native packages, not sibling files. Packages like
+      sharp read `vendor/` data files via `fs.readFileSync()` at runtime,
+      which are not traceable via `require()`. These files were missing
+      from the snapshot, causing runtime failures.
+    - **Fix**: when a `.node` file is detected inside `node_modules/`,
+      auto-include all files in the containing package directory. Added
+      `walkDirRecursive()` helper for this traversal.
+    - Fixture verifies: addon loads, functions execute, vendor config
+      file is accessible in packaged mode (9 checks)
+    - Both node and packaged pass (2/2)
     - _Depends on: 29.1, 22.2_
+    - **Output:** `fixtures/native-prebuild/`, `analyzer.ts`

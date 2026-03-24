@@ -1,0 +1,11 @@
+{
+  "format": "native-prebuild",
+  "addon_loaded": true,
+  "add_result": 42,
+  "multiply_result": 42,
+  "native_version": "1.0.0",
+  "vendor_loaded": true,
+  "vendor_library": "native-pkg",
+  "vendor_features": 3,
+  "package_name": "native-pkg"
+}

@@ -154,6 +154,26 @@ function detectModuleFormat(
 // File classification
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Recursively walk a directory and call the callback for each file.
+ */
+function walkDirRecursive(dir: string, cb: (filePath: string) => void): void {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkDirRecursive(fullPath, cb);
+    } else if (entry.isFile()) {
+      cb(fullPath);
+    }
+  }
+}
+
 function classifyFile(filePath: string): FileKind {
   const ext = path.extname(filePath);
   const base = path.basename(filePath);
@@ -639,6 +659,30 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
         targetPlatform: null,
         targetArch: null,
       });
+
+      // Auto-include all files in the native addon's package directory.
+      // Native packages (sharp, drivelist, etc.) often read sibling files
+      // (vendor configs, data files) via fs.readFileSync() at runtime.
+      // The prelude's dlopen patch copies the entire package directory to
+      // the extraction cache, so we must ensure all files are in the snapshot.
+      const addonDir = path.dirname(realPath);
+      const addonParts = addonDir.split(path.sep);
+      const nmIndex = addonParts.lastIndexOf('node_modules');
+      if (nmIndex >= 0 && nmIndex + 1 < addonParts.length) {
+        // Determine package root: node_modules/@scope/pkg or node_modules/pkg
+        let pkgRootIdx = nmIndex + 1;
+        if (addonParts[pkgRootIdx]?.startsWith('@') && pkgRootIdx + 1 < addonParts.length) {
+          pkgRootIdx += 1; // scoped package
+        }
+        const pkgRoot = addonParts.slice(0, pkgRootIdx + 1).join(path.sep);
+        if (fs.existsSync(pkgRoot)) {
+          walkDirRecursive(pkgRoot, (filePath) => {
+            if (!visited.has(filePath)) {
+              addFile(filePath);
+            }
+          });
+        }
+      }
     }
 
     return file;
