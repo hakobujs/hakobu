@@ -107,8 +107,8 @@ and will be renamed to `HAKOBU_EXECPATH` when the patches are updated
 - A binary that passes all three checks and has its SHA-256 recorded in
   `expected-shas.json` is considered a trusted base binary
 
-## Alpha Limitations
+## Known Limitations
 
-- `linuxstatic-arm64` is excluded from alpha due to a toolchain blocker.
+- `linuxstatic-arm64` is excluded due to a toolchain blocker (musl cross-compiler
+  cannot compile Node 24's C++20 dependencies).
 - `macos-x64` uses Rosetta verification (cross-compiled on arm64 runner).
-  A future follow-up could use an Intel-native runner if available.

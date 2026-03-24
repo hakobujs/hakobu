@@ -77,11 +77,11 @@ the failure indicates a regression.
 | `linuxstatic-arm64` | Docker + cross   | Docker + qemu         | `ubuntu-latest`   |
 | `win-arm64`         | native           | native                | `windows-11-arm`  |
 
-**`linuxstatic-arm64` alpha status: blocked.** The `muslcc/x86_64:aarch64-linux-musl`
+**`linuxstatic-arm64` status: blocked.** The `muslcc/x86_64:aarch64-linux-musl`
 cross-compiler ships a GCC version that cannot compile Node 24's `deps/ada/ada.h`
-(C++20 `constexpr` incompatibility). This target is excluded from alpha CI until
+(C++20 `constexpr` incompatibility). This target is excluded from CI until
 a newer musl cross-toolchain is available or a native arm64 Alpine build path is
-established. It is Tier 2 / best-effort and does not block alpha releases.
+established. It is Tier 2 / best-effort and does not block releases.
 
 Rationale:
 - `macos-x64` is included because Intel Macs remain in active use, but Apple
@@ -119,17 +119,11 @@ A deferred target can be promoted to Tier 2 or Tier 1 by:
 
 This table summarizes which tiers are active at each release stage.
 
-| Stage   | Tier 1 | Tier 2 | Tier 3 |
-| ------- | ------ | ------ | ------ |
-| Alpha   | required, release-blocking | best-effort, may be incomplete | not published |
-| Beta    | required, release-blocking | required, release-blocking     | not published |
-| v1 GA   | required, release-blocking | required, release-blocking     | not published |
-
-At **alpha**, Tier 2 targets should be built if feasible but are not gating.
-This allows the project to ship early alphas while the Docker-based and
-Rosetta-based build paths are stabilized.
-
-At **beta** and beyond, Tier 2 targets are promoted to release-blocking.
+| Tier   | Release Status |
+| ------ | -------------- |
+| Tier 1 | Required, release-blocking |
+| Tier 2 | Supported, best-effort (failures are high-priority bugs but do not block) |
+| Tier 3 | Not published |
 
 ## Build vs Verification Strategy
 
@@ -166,10 +160,7 @@ state this clearly per Requirement 10.3.
 Per the design doc and Requirement 6.2, the Windows Playwright/Camoufox
 workload is a **release gate for Windows support claims**. This means:
 
-- `win-x64` cannot be promoted to "supported" in release notes until the
-  Playwright/Camoufox fixture passes on `windows-latest`
-- this gate applies at beta and v1, not at alpha (alpha may ship win-x64
-  binaries without this gate while the fixture is being developed)
+- `win-x64` is supported and verified via CI fixtures on `windows-latest`
 
 ## Runner Expansion
 

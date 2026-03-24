@@ -8,23 +8,12 @@ are structured and what consumers can depend on.
 
 ### Package Versions
 
-Both published npm packages follow semver independently:
+Both published npm packages follow semver:
 
-| Package                 | Starting Version | Notes                         |
-| ----------------------- | ---------------- | ----------------------------- |
-| `@hakobu/hakobu`        | `0.1.0`          | CLI + programmatic API        |
-| `@hakobu/hakobu-fetch`  | `0.1.0`          | patched Node binary manager   |
-
-**Pre-1.0 versioning (`0.MINOR.PATCH`):**
-
-| Change Type                          | Version Bump         | Example             |
-| ------------------------------------ | -------------------- | ------------------- |
-| Breaking change (API, config, CLI)   | increment `MINOR`    | `0.2.0` → `0.3.0`  |
-| New feature (backward-compatible)    | increment `PATCH`    | `0.2.0` → `0.2.1`  |
-| Bug fix                              | increment `PATCH`    | `0.2.1` → `0.2.2`  |
-
-Every `0.MINOR.0` release resets the patch counter. Pre-1.0 consumers should
-pin to `0.MINOR.x` and expect breaking changes on `MINOR` bumps.
+| Package                 | Current Version | Notes                         |
+| ----------------------- | --------------- | ----------------------------- |
+| `@hakobu/hakobu`        | `1.0.0`         | CLI + programmatic API        |
+| `@hakobu/hakobu-fetch`  | `1.0.0`         | patched Node binary manager   |
 
 **Post-1.0 versioning:** standard semver. Breaking changes increment major,
 features increment minor, fixes increment patch.
@@ -72,7 +61,7 @@ When fetched or built locally, base binaries are stored at:
 ```
 
 Where `{fetchVersion}` is the `@hakobu/hakobu-fetch` package version tag
-(e.g., `v0.1.0`).
+(e.g., `v1.0.0`).
 
 The cache path is configurable via the `HAKOBU_CACHE_PATH` environment
 variable.
@@ -101,8 +90,8 @@ The monorepo uses scoped release tags to distinguish between the two packages:
 
 | Package                | Tag Pattern                | Example            |
 | ---------------------- | -------------------------- | ------------------ |
-| `@hakobu/hakobu`       | `v{version}`               | `v0.1.0`           |
-| `@hakobu/hakobu-fetch` | `fetch/v{version}`         | `fetch/v0.1.0`     |
+| `@hakobu/hakobu`       | `v{version}`               | `v1.0.0`           |
+| `@hakobu/hakobu-fetch` | `fetch/v{version}`         | `fetch/v1.0.0`     |
 | Patched base binaries  | `bases/node-v{nodeVersion}`| `bases/node-v24.14.0` |
 
 Base binary releases are tagged separately from `hakobu-fetch` package
@@ -134,8 +123,8 @@ Tier 3 (deferred) targets are not included in releases.
 Each `v{version}` release contains:
 
 ```
-v0.1.0/
-├── hakobu-v0.1.0.tgz           (npm tarball, convenience copy)
+v1.0.0/
+├── hakobu-v1.0.0.tgz           (npm tarball, convenience copy)
 ├── CHECKSUMS.sha256
 └── CHANGELOG.md                 (release-specific excerpt)
 ```
@@ -148,8 +137,8 @@ tarball is a convenience artifact for environments that cannot use npm.
 Each `fetch/v{version}` release contains:
 
 ```
-fetch/v0.1.0/
-├── hakobu-fetch-v0.1.0.tgz     (npm tarball, convenience copy)
+fetch/v1.0.0/
+├── hakobu-fetch-v1.0.0.tgz     (npm tarball, convenience copy)
 ├── CHECKSUMS.sha256
 └── CHANGELOG.md                 (release-specific excerpt)
 ```
@@ -197,7 +186,7 @@ structure:
 
 ```json
 {
-  "hakobuFetchVersion": "0.1.0",
+  "hakobuFetchVersion": "1.0.0",
   "nodeVersion": "24.14.0",
   "nodeSourceSha256": "<sha256 of the upstream Node source tarball>",
   "patchSetSha256": "<sha256 of the combined patch content>",
