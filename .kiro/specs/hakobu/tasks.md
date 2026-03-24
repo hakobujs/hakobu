@@ -989,11 +989,14 @@
     - _Depends on: 12.1_
     - **Output:** `fixtures/dynamic-require/`, `analyzer.ts`, `packager.ts`
 
-  - [ ] 29.4 pkg-fetch `/lib` detection hardening for non-FHS systems
-    - The base-binary build pipeline detects system libraries via
-      `/lib` path assumptions that fail on NixOS, Guix, and similar
-    - Add fallback detection or env-var override
+  - [x] 29.4 pkg-fetch `/lib` detection hardening for non-FHS systems
+    - **Bug**: `detectAlpine()` called `fs.readdirSync('/lib')` without
+      error handling — crashes on NixOS/Guix where `/lib` doesn't exist
+    - **Fix**: wrapped in try/catch, returns false when `/lib` missing
+    - Also hardened `/proc/cpuinfo` read and `ldd` stdout access
+    - Detection semantics preserved for supported environments
     - _Depends on: 3.1_
+    - **Output:** `packages/hakobu-fetch/lib/system.ts`
 
   - [ ] 29.5 Asset glob handling with spaces/special chars in paths
     - Verify and fix asset glob resolution when cwd or file paths

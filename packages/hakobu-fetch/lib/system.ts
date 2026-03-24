@@ -40,14 +40,20 @@ function detectAlpine() {
   const ldd = spawnSync('ldd').stderr?.toString();
 
   if (ldd == null) {
-    return fs.readdirSync('/lib').some((file) => file.startsWith('libc.musl'));
+    // Fallback: check /lib for musl libc.
+    // /lib may not exist on non-FHS systems (NixOS, Guix, etc.)
+    try {
+      return fs.readdirSync('/lib').some((file) => file.startsWith('libc.musl'));
+    } catch {
+      return false;
+    }
   }
 
   if (/\bmusl\b/.test(ldd)) {
     return true;
   }
 
-  const lddNode = spawnSync('ldd', [process.execPath]).stdout.toString();
+  const lddNode = spawnSync('ldd', [process.execPath]).stdout?.toString() || '';
   return /\bmusl\b/.test(lddNode);
 }
 
@@ -91,7 +97,13 @@ function getArmUnameArch() {
 }
 
 function getArmHostArch() {
-  const cpu = fs.readFileSync('/proc/cpuinfo', 'utf8');
+  let cpu: string;
+  try {
+    cpu = fs.readFileSync('/proc/cpuinfo', 'utf8');
+  } catch {
+    // /proc/cpuinfo not available (non-Linux, or /proc not mounted)
+    return 'armv7'; // safe default for ARM when detection fails
+  }
 
   if (cpu.indexOf('vfpv3') >= 0) {
     return 'armv7';
