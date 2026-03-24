@@ -674,24 +674,20 @@ function payloadFileSync(pointer) {
 
   function removeTemporaryFolderAndContent(folder) {
     if (!folder) return;
-    if (NODE_VERSION_MAJOR <= 14) {
-      if (NODE_VERSION_MAJOR <= 10) {
-        // folder must be empty
-        for (const f of fs.readdirSync(folder)) {
-          fs.unlinkSync(path.join(folder, f));
-        }
-        fs.rmdirSync(folder);
-      } else {
-        fs.rmdirSync(folder, { recursive: true });
-      }
-    } else {
-      fs.rmSync(folder, { recursive: true });
+    try {
+      fs.rmSync(folder, { recursive: true, force: true });
+    } catch {
+      // Best-effort cleanup — may fail if another process holds a lock
     }
   }
   const temporaryFiles = {};
   const os = require('os');
   let tmpFolder = '';
-  process.on('beforeExit', () => {
+  // Use 'exit' instead of 'beforeExit' — 'beforeExit' does NOT fire
+  // on process.exit(), which leaves temp files behind.
+  // 'exit' fires on both normal completion and explicit process.exit().
+  // The handler must be synchronous (fs.rmSync is fine).
+  process.on('exit', () => {
     removeTemporaryFolderAndContent(tmpFolder);
   });
   function deflateSync(snapshotFilename) {

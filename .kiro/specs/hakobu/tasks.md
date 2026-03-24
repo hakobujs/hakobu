@@ -943,3 +943,47 @@
     - Both node and packaged pass (2/2)
     - _Depends on: 28.1_
     - **Output:** `fixtures/pattern-exports/`, `exports-resolver.ts`
+
+- [ ] 29. Runtime compatibility and hardening
+  - [x] 29.1 Fix native addon temp cleanup on hard exit
+    - Changed `process.on('beforeExit', ...)` to `process.on('exit', ...)`
+      in `prelude/bootstrap.js` — `beforeExit` does not fire on
+      `process.exit()`, leaving temp directories behind
+    - Simplified cleanup function: removed Node 10/14 compat branches
+      (Hakobu targets Node 24 only), uses `fs.rmSync` with try/catch
+    - Added `fixtures/test-exit-cleanup.js` with 5 tests:
+      Brotli + process.exit() (runs, no temp left), uncompressed +
+      process.exit() (runs), GZip + normal exit (runs, no temp left)
+    - _Depends on: 9.1_
+    - **Output:** `prelude/bootstrap.js`, `fixtures/test-exit-cleanup.js`
+
+  - [ ] 29.2 Harden native addon cache path (no-home fallback)
+    - If `$HOME` / `os.homedir()` is unset or unwritable, the native
+      addon extraction cache at `~/.cache/pkg/` will crash
+    - Fall back to os.tmpdir() or HAKOBU_ADDON_CACHE env var
+    - _Depends on: 29.1_
+
+  - [ ] 29.3 Dynamic require hardening fixture and diagnostics
+    - Add fixture exercising `require(variable)` patterns with known
+      target files listed as assets
+    - Verify asset-declared dynamic requires resolve at runtime
+    - Improve diagnostics for unresolvable dynamic requires
+    - _Depends on: 12.1_
+
+  - [ ] 29.4 pkg-fetch `/lib` detection hardening for non-FHS systems
+    - The base-binary build pipeline detects system libraries via
+      `/lib` path assumptions that fail on NixOS, Guix, and similar
+    - Add fallback detection or env-var override
+    - _Depends on: 3.1_
+
+  - [ ] 29.5 Asset glob handling with spaces/special chars in paths
+    - Verify and fix asset glob resolution when cwd or file paths
+      contain spaces, parentheses, or Unicode characters
+    - _Depends on: 12.1_
+
+  - [ ] 29.6 Hard native package fixtures (sharp, drivelist)
+    - Add fixtures or integration tests for native packages known to
+      be problematic: sharp (prebuild extraction), drivelist (build
+      from source), etc.
+    - Fix any extraction/dlopen/path issues exposed
+    - _Depends on: 29.1, 22.2_
