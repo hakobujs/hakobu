@@ -100,7 +100,7 @@ export class RolldownAdapter implements BundleAdapter {
     } catch {
       throw new Error(
         'Rolldown is required for bundle mode but could not be loaded.\n' +
-        'Install it with: pnpm add rolldown'
+          'Install it with: pnpm add rolldown',
       );
     }
 
@@ -128,9 +128,15 @@ export class RolldownAdapter implements BundleAdapter {
         /^bun:/,
         /^electron$/,
         /^chromium-bidi/,
-        ...external.map(e => {
+        ...external.map((e) => {
           if (e.includes('*')) {
-            return new RegExp('^' + e.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '.*') + '$');
+            return new RegExp(
+              '^' +
+                e
+                  .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                  .replace(/\\\*/g, '.*') +
+                '$',
+            );
           }
           return e;
         }),
@@ -178,13 +184,15 @@ export class RolldownAdapter implements BundleAdapter {
       );
       log.info(
         `  output: ${(outSize / 1024).toFixed(0)}KB bundled ` +
-        `(${writeResult.strategy}, ${writeResult.chunkCount} chunk${writeResult.chunkCount === 1 ? '' : 's'})`,
+          `(${writeResult.strategy}, ${writeResult.chunkCount} chunk${writeResult.chunkCount === 1 ? '' : 's'})`,
       );
       if (writeResult.fallbackReason) {
         log.info(`  fallback: ${writeResult.fallbackReason}`);
       }
       if (writeResult.injectedChunks && writeResult.injectedChunks.length > 0) {
-        log.info(`  injected __dirname/__filename into ${writeResult.injectedChunks.length} chunk(s)`);
+        log.info(
+          `  injected __dirname/__filename into ${writeResult.injectedChunks.length} chunk(s)`,
+        );
       }
 
       // Post-bundle diagnostics: classify warnings and scan for unhandled patterns
@@ -203,7 +211,9 @@ export class RolldownAdapter implements BundleAdapter {
       }
 
       // Collect map file paths relative to tmpDir for asset inclusion
-      const relativeMapFiles = writeResult.mapFiles.map(f => path.relative(tmpDir, f));
+      const relativeMapFiles = writeResult.mapFiles.map((f) =>
+        path.relative(tmpDir, f),
+      );
 
       return {
         projectRoot: tmpDir,
@@ -217,12 +227,16 @@ export class RolldownAdapter implements BundleAdapter {
         cleanup: () => {
           try {
             fs.rmSync(tmpDir, { recursive: true, force: true });
-          } catch { /* best effort */ }
+          } catch {
+            /* best effort */
+          }
         },
       };
     } catch (err: any) {
       // Clean up on failure
-      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
       throw new Error(`Rolldown bundle failed: ${err.message}`);
     }
   }
@@ -247,8 +261,7 @@ const CHUNK_BANNER = [
   `import{dirname as _hk_d}from'node:path';`,
 ].join('');
 
-const PATH_GLOBALS_POLYFILL =
-  `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`;
+const PATH_GLOBALS_POLYFILL = `var __filename=_hk_f(import.meta.url),__dirname=_hk_d(__filename);`;
 
 async function writeBundleOutput(
   build: any,
@@ -270,9 +283,11 @@ async function writeBundleOutput(
     chunkCount: result.jsFiles.length,
     jsFiles: result.jsFiles,
     mapFiles: result.mapFiles,
-    ...(injectedChunks.length > 0 ? {
-      injectedChunks: injectedChunks.map(f => path.basename(f)),
-    } : {}),
+    ...(injectedChunks.length > 0
+      ? {
+          injectedChunks: injectedChunks.map((f) => path.basename(f)),
+        }
+      : {}),
   };
 }
 
@@ -295,7 +310,10 @@ async function writeBundle(
   return listBundleFiles(tmpDir);
 }
 
-function listBundleFiles(rootDir: string): { jsFiles: string[]; mapFiles: string[] } {
+function listBundleFiles(rootDir: string): {
+  jsFiles: string[];
+  mapFiles: string[];
+} {
   const jsFiles: string[] = [];
   const mapFiles: string[] = [];
 
@@ -358,7 +376,8 @@ function injectPolyfillIntoFile(filePath: string): void {
   const bannerEnd = code.indexOf(`from'node:path';`);
   if (bannerEnd >= 0) {
     const insertPos = bannerEnd + `from'node:path';`.length;
-    const patched = code.slice(0, insertPos) + PATH_GLOBALS_POLYFILL + code.slice(insertPos);
+    const patched =
+      code.slice(0, insertPos) + PATH_GLOBALS_POLYFILL + code.slice(insertPos);
     fs.writeFileSync(filePath, patched);
   } else {
     // No banner found — prepend the full polyfill with imports
@@ -446,11 +465,14 @@ function analyzeBundleDiagnostics(
   // ── Unresolved imports ──
   if (uniqueUnresolved.length > 0) {
     // Separate bun:* and other runtime-specific from real missing packages
-    const runtimeSpecific = uniqueUnresolved.filter(p =>
-      p.startsWith('bun:') || p.startsWith('deno:')
+    const runtimeSpecific = uniqueUnresolved.filter(
+      (p) => p.startsWith('bun:') || p.startsWith('deno:'),
     );
-    const realMissing = uniqueUnresolved.filter(p =>
-      !p.startsWith('bun:') && !p.startsWith('deno:') && !p.startsWith('node:')
+    const realMissing = uniqueUnresolved.filter(
+      (p) =>
+        !p.startsWith('bun:') &&
+        !p.startsWith('deno:') &&
+        !p.startsWith('node:'),
     );
 
     if (runtimeSpecific.length > 0) {
@@ -463,8 +485,9 @@ function analyzeBundleDiagnostics(
     if (realMissing.length > 0) {
       diagnostics.push({
         severity: 'warn',
-        message: `[bundle] Unresolved packages: ${realMissing.join(', ')}. ` +
-          `If these are optional, use --external ${realMissing.map(p => `"${p}"`).join(' --external ')}`,
+        message:
+          `[bundle] Unresolved packages: ${realMissing.join(', ')}. ` +
+          `If these are optional, use --external ${realMissing.map((p) => `"${p}"`).join(' --external ')}`,
       });
     }
   }
@@ -473,14 +496,17 @@ function analyzeBundleDiagnostics(
   if (uniqueDynamic.length > 0) {
     diagnostics.push({
       severity: 'warn',
-      message: `[bundle] Dynamic import() with variable arguments in ${uniqueDynamic.length} location(s). ` +
+      message:
+        `[bundle] Dynamic import() with variable arguments in ${uniqueDynamic.length} location(s). ` +
         `Hakobu cannot trace these statically — the imported modules must be available at runtime.`,
     });
   }
 
   // ── Applied patches summary ──
   if (appliedPatches.length > 0) {
-    const scopes = [...new Set(appliedPatches.map(p => p.split(':')[0].trim()))];
+    const scopes = [
+      ...new Set(appliedPatches.map((p) => p.split(':')[0].trim())),
+    ];
     diagnostics.push({
       severity: 'info',
       message: `[bundle] Compatibility patches applied for: ${scopes.join(', ')} (handled automatically)`,
@@ -504,7 +530,7 @@ function analyzeBundleDiagnostics(
   }
 
   // ── Summary line ──
-  const issueCount = diagnostics.filter(d => d.severity === 'warn').length;
+  const issueCount = diagnostics.filter((d) => d.severity === 'warn').length;
   if (issueCount === 0 && diagnostics.length > 0) {
     diagnostics.push({
       severity: 'info',
@@ -559,19 +585,22 @@ const BUNDLE_PATCH_RULES: BundlePatchRule[] = [
   {
     name: 'dirname(resolve(playwright/package.json))',
     scope: 'playwright-core',
-    pattern: /(?:dirname|_hk_d)\(\s*(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)\s*\)/g,
+    pattern:
+      /(?:dirname|_hk_d)\(\s*(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)\s*\)/g,
     replacement: 'process.cwd()',
   },
   {
     name: 'resolve(playwright/package.json)',
     scope: 'playwright-core',
-    pattern: /(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    pattern:
+      /(?:__require\.resolve|require\.resolve)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
     replacement: '"playwright-core-stub"',
   },
   {
     name: 'require(playwright/package.json)',
     scope: 'playwright-core',
-    pattern: /(?:__require|require)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
+    pattern:
+      /(?:__require|require)\(\s*"[^"]*playwright[^"]*package\.json"\s*\)/g,
     replacement: '({name:"playwright-core",version:"0.0.0"})',
   },
 
@@ -582,13 +611,15 @@ const BUNDLE_PATCH_RULES: BundlePatchRule[] = [
   {
     name: 'dirname(resolve(../package.json))',
     scope: 'relative-package-json',
-    pattern: /[\w$.]+\.dirname\(\s*(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)\s*\)/g,
+    pattern:
+      /[\w$.]+\.dirname\(\s*(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)\s*\)/g,
     replacement: 'process.cwd()',
   },
   {
     name: 'resolve(../package.json)',
     scope: 'relative-package-json',
-    pattern: /(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
+    pattern:
+      /(?:__require\.resolve|require\.resolve)\(\s*"(?:\.\.\/)+package\.json"\s*\)/g,
     replacement: '"package-json-stub"',
   },
   {
@@ -641,7 +672,10 @@ async function loadRolldown(): Promise<any> {
   const dynamicImport = new Function('specifier', 'return import(specifier)');
 
   // Try to find rolldown in the local node_modules first
-  const localPath = path.resolve(__dirname, '../node_modules/rolldown/dist/index.mjs');
+  const localPath = path.resolve(
+    __dirname,
+    '../node_modules/rolldown/dist/index.mjs',
+  );
   if (fs.existsSync(localPath)) {
     _rolldownCache = await dynamicImport(pathToFileURL(localPath).href);
     return _rolldownCache;
@@ -668,7 +702,7 @@ export function getAdapter(name: string): BundleAdapter {
   const factory = adapters[name];
   if (!factory) {
     throw new Error(
-      `Unknown bundler: ${name}. Available: ${Object.keys(adapters).join(', ')}`
+      `Unknown bundler: ${name}. Available: ${Object.keys(adapters).join(', ')}`,
     );
   }
   return factory();

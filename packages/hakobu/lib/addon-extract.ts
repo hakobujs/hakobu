@@ -53,7 +53,9 @@ export function getAddonCacheDir(): string {
     if (home) {
       return path.join(home, '.hakobu', 'addons');
     }
-  } catch { /* home unavailable */ }
+  } catch {
+    /* home unavailable */
+  }
   return path.join(os.tmpdir(), 'hakobu-addons');
 }
 
@@ -98,10 +100,7 @@ export function extractAddon(
   const content = sfs.readFileSync(canonical);
 
   // Compute content hash for deterministic path
-  const contentHash = crypto
-    .createHash('sha256')
-    .update(content)
-    .digest('hex');
+  const contentHash = crypto.createHash('sha256').update(content).digest('hex');
 
   // Build extraction path: {cacheDir}/{hash}/{filename}
   const fileName = path.basename(canonical);

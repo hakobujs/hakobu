@@ -57,12 +57,7 @@ export interface ExeMetadata {
 
 function parseVersionQuad(v: string): [number, number, number, number] {
   const parts = v.split('.').map(Number);
-  return [
-    parts[0] || 0,
-    parts[1] || 0,
-    parts[2] || 0,
-    parts[3] || 0,
-  ];
+  return [parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0];
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -91,8 +86,8 @@ export async function injectPeMetadata(
   } catch {
     throw new Error(
       'Cannot inject PE metadata: resedit is not installed.\n' +
-      'Install it with: pnpm add resedit\n' +
-      'resedit is a pure-JS PE resource editor that works cross-platform.'
+        'Install it with: pnpm add resedit\n' +
+        'resedit is a pure-JS PE resource editor that works cross-platform.',
     );
   }
 
@@ -104,9 +99,14 @@ export async function injectPeMetadata(
   const res = NtExecutableResource.from(exe);
 
   // ── Version info ──
-  if (metadata.fileVersion || metadata.productVersion || metadata.productName ||
-      metadata.fileDescription || metadata.companyName || metadata.legalCopyright) {
-
+  if (
+    metadata.fileVersion ||
+    metadata.productVersion ||
+    metadata.productName ||
+    metadata.fileDescription ||
+    metadata.companyName ||
+    metadata.legalCopyright
+  ) {
     // Get existing version info or create new
     const viList = Resource.VersionInfo.fromEntries(res.entries);
     let vi: any;
@@ -118,7 +118,7 @@ export async function injectPeMetadata(
     }
 
     const lang = 0x0409; // English (US)
-    const codepage = 0x04B0; // Unicode
+    const codepage = 0x04b0; // Unicode
 
     if (metadata.fileVersion) {
       const [a, b, c, d] = parseVersionQuad(metadata.fileVersion);
@@ -132,10 +132,12 @@ export async function injectPeMetadata(
     }
 
     const strings: Record<string, string> = {};
-    if (metadata.fileDescription) strings.FileDescription = metadata.fileDescription;
+    if (metadata.fileDescription)
+      strings.FileDescription = metadata.fileDescription;
     if (metadata.productName) strings.ProductName = metadata.productName;
     if (metadata.companyName) strings.CompanyName = metadata.companyName;
-    if (metadata.legalCopyright) strings.LegalCopyright = metadata.legalCopyright;
+    if (metadata.legalCopyright)
+      strings.LegalCopyright = metadata.legalCopyright;
     if (metadata.fileVersion) strings.FileVersion = metadata.fileVersion;
     if (metadata.productVersion || metadata.fileVersion) {
       strings.ProductVersion = metadata.productVersion || metadata.fileVersion!;

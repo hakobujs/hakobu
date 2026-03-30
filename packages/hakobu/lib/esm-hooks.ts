@@ -23,9 +23,15 @@ export function getHookSource(): string {
  */
 export interface HookTransferData {
   /** Snapshot entries: path → { offset, size, format } */
-  entries: Record<string, { offset: number; size: number; format: string | null }>;
+  entries: Record<
+    string,
+    { offset: number; size: number; format: string | null }
+  >;
   /** Package boundaries: path → { type, exports, imports, main, directory } */
-  packages: Record<string, { type: string | null; main: string | null; directory: string }>;
+  packages: Record<
+    string,
+    { type: string | null; main: string | null; directory: string }
+  >;
   /** The blob content as ArrayBuffer */
   blob: ArrayBuffer;
   /** Application ID */

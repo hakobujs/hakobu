@@ -101,7 +101,10 @@ export function resolveExports(
     const prefix = pattern.slice(0, starIndex);
     const suffix = pattern.slice(starIndex + 1);
 
-    if (subpath.startsWith(prefix) && (suffix === '' || subpath.endsWith(suffix))) {
+    if (
+      subpath.startsWith(prefix) &&
+      (suffix === '' || subpath.endsWith(suffix))
+    ) {
       const matched = suffix
         ? subpath.slice(prefix.length, subpath.length - suffix.length)
         : subpath.slice(prefix.length);
@@ -150,7 +153,10 @@ export function resolveImports(
     const prefix = key.slice(0, starIndex);
     const suffix = key.slice(starIndex + 1);
 
-    if (specifier.startsWith(prefix) && (suffix === '' || specifier.endsWith(suffix))) {
+    if (
+      specifier.startsWith(prefix) &&
+      (suffix === '' || specifier.endsWith(suffix))
+    ) {
       const matched = suffix
         ? specifier.slice(prefix.length, specifier.length - suffix.length)
         : specifier.slice(prefix.length);

@@ -30,7 +30,11 @@ import {
   fromFileUrl,
   toNative,
 } from './snapshot-path';
-import { resolveExports, resolveImports, ESM_CONDITIONS } from './exports-resolver';
+import {
+  resolveExports,
+  resolveImports,
+  ESM_CONDITIONS,
+} from './exports-resolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Resolution result
@@ -49,7 +53,12 @@ export interface ResolveResult {
  * Node's expected format strings for the load hook.
  * These match what Node 24's ESM loader accepts.
  */
-export type NodeModuleFormat = 'module' | 'commonjs' | 'json' | 'wasm' | 'builtin';
+export type NodeModuleFormat =
+  | 'module'
+  | 'commonjs'
+  | 'json'
+  | 'wasm'
+  | 'builtin';
 
 export interface LoadResult {
   /** Module source as a string. */
@@ -63,16 +72,61 @@ export interface LoadResult {
 // ─────────────────────────────────────────────────────────────────────
 
 const BUILTINS = new Set([
-  'assert', 'assert/strict', 'async_hooks', 'buffer', 'child_process',
-  'cluster', 'console', 'constants', 'crypto', 'dgram',
-  'diagnostics_channel', 'dns', 'dns/promises', 'domain', 'events',
-  'fs', 'fs/promises', 'http', 'http2', 'https', 'inspector',
-  'inspector/promises', 'module', 'net', 'os', 'path', 'path/posix',
-  'path/win32', 'perf_hooks', 'process', 'punycode', 'querystring',
-  'readline', 'readline/promises', 'repl', 'stream', 'stream/consumers',
-  'stream/promises', 'stream/web', 'string_decoder', 'sys', 'test',
-  'timers', 'timers/promises', 'tls', 'trace_events', 'tty', 'url',
-  'util', 'util/types', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib',
+  'assert',
+  'assert/strict',
+  'async_hooks',
+  'buffer',
+  'child_process',
+  'cluster',
+  'console',
+  'constants',
+  'crypto',
+  'dgram',
+  'diagnostics_channel',
+  'dns',
+  'dns/promises',
+  'domain',
+  'events',
+  'fs',
+  'fs/promises',
+  'http',
+  'http2',
+  'https',
+  'inspector',
+  'inspector/promises',
+  'module',
+  'net',
+  'os',
+  'path',
+  'path/posix',
+  'path/win32',
+  'perf_hooks',
+  'process',
+  'punycode',
+  'querystring',
+  'readline',
+  'readline/promises',
+  'repl',
+  'stream',
+  'stream/consumers',
+  'stream/promises',
+  'stream/web',
+  'string_decoder',
+  'sys',
+  'test',
+  'timers',
+  'timers/promises',
+  'tls',
+  'trace_events',
+  'tty',
+  'url',
+  'util',
+  'util/types',
+  'v8',
+  'vm',
+  'wasi',
+  'worker_threads',
+  'zlib',
   'sqlite',
 ]);
 
@@ -85,7 +139,10 @@ function isBuiltin(specifier: string): boolean {
 // Format determination
 // ─────────────────────────────────────────────────────────────────────
 
-function determineFormat(snapshotPath: string, sfs: SnapshotFS): NodeModuleFormat {
+function determineFormat(
+  snapshotPath: string,
+  sfs: SnapshotFS,
+): NodeModuleFormat {
   const ext = path.extname(snapshotPath);
 
   // Extension-based (definitive)
@@ -127,7 +184,10 @@ function tryResolveFile(snapshotPath: string, sfs: SnapshotFS): string | null {
   }
 
   // Directory with index
-  if (sfs.existsSync(snapshotPath) && sfs.statSync(snapshotPath).isDirectory()) {
+  if (
+    sfs.existsSync(snapshotPath) &&
+    sfs.statSync(snapshotPath).isDirectory()
+  ) {
     // Check package.json main
     const pjPath = snapshotPath + '/package.json';
     if (sfs.existsSync(pjPath)) {
@@ -214,7 +274,10 @@ export class ESMResolver {
 
   // ── Internal resolution ──
 
-  private resolveSnapshotPath(snapshotPath: string, originalSpecifier: string): ResolveResult | null {
+  private resolveSnapshotPath(
+    snapshotPath: string,
+    originalSpecifier: string,
+  ): ResolveResult | null {
     const resolved = tryResolveFile(snapshotPath, this.sfs);
     if (!resolved) return null;
 
@@ -225,13 +288,19 @@ export class ESMResolver {
     };
   }
 
-  private resolveRelative(specifier: string, parentUrl: string): ResolveResult | null {
+  private resolveRelative(
+    specifier: string,
+    parentUrl: string,
+  ): ResolveResult | null {
     // Convert parent URL to snapshot path
     const parentSnapshotPath = fromFileUrl(parentUrl);
     if (!parentSnapshotPath) return null; // parent is not in snapshot
 
     // Resolve relative to parent directory
-    const parentDir = parentSnapshotPath.substring(0, parentSnapshotPath.lastIndexOf('/'));
+    const parentDir = parentSnapshotPath.substring(
+      0,
+      parentSnapshotPath.lastIndexOf('/'),
+    );
     const targetPath = toCanonical(parentDir + '/' + specifier);
 
     // Only resolve within snapshot
@@ -240,7 +309,10 @@ export class ESMResolver {
     return this.resolveSnapshotPath(targetPath, specifier);
   }
 
-  private resolveBare(specifier: string, parentUrl: string): ResolveResult | null {
+  private resolveBare(
+    specifier: string,
+    parentUrl: string,
+  ): ResolveResult | null {
     const parentSnapshotPath = fromFileUrl(parentUrl);
     if (!parentSnapshotPath) return null;
 
@@ -249,7 +321,10 @@ export class ESMResolver {
       : specifier.split('/')[0];
     const subpath = '.' + specifier.slice(pkgName.length);
 
-    let searchDir = parentSnapshotPath.substring(0, parentSnapshotPath.lastIndexOf('/'));
+    let searchDir = parentSnapshotPath.substring(
+      0,
+      parentSnapshotPath.lastIndexOf('/'),
+    );
     const snapshotRoot = '/snapshot/' + this.sfs.getAppId();
 
     while (searchDir.startsWith(snapshotRoot)) {
@@ -257,7 +332,9 @@ export class ESMResolver {
 
       if (this.sfs.existsSync(nmDir)) {
         const pkgJsonPath = nmDir + '/package.json';
-        const pkg = this.sfs.existsSync(pkgJsonPath) ? this.sfs.getPackage(pkgJsonPath) : null;
+        const pkg = this.sfs.existsSync(pkgJsonPath)
+          ? this.sfs.getPackage(pkgJsonPath)
+          : null;
 
         // ── exports map resolution ──
         // When "exports" is present, Node ONLY uses the exports map
@@ -284,7 +361,10 @@ export class ESMResolver {
         // ── Legacy resolution (no exports map) ──
         if (subpath === '.') {
           if (pkg?.main) {
-            const mainResolved = tryResolveFile(toCanonical(nmDir + '/' + pkg.main), this.sfs);
+            const mainResolved = tryResolveFile(
+              toCanonical(nmDir + '/' + pkg.main),
+              this.sfs,
+            );
             if (mainResolved) {
               return {
                 url: toFileUrl(mainResolved),
@@ -302,7 +382,10 @@ export class ESMResolver {
             };
           }
         } else {
-          const subResolved = tryResolveFile(toCanonical(nmDir + '/' + subpath.slice(2)), this.sfs);
+          const subResolved = tryResolveFile(
+            toCanonical(nmDir + '/' + subpath.slice(2)),
+            this.sfs,
+          );
           if (subResolved) {
             return {
               url: toFileUrl(subResolved),
@@ -323,7 +406,10 @@ export class ESMResolver {
 
   // ── #imports resolution ──
 
-  private resolvePackageImports(specifier: string, parentUrl: string): ResolveResult | null {
+  private resolvePackageImports(
+    specifier: string,
+    parentUrl: string,
+  ): ResolveResult | null {
     const parentSnapshotPath = fromFileUrl(parentUrl);
     if (!parentSnapshotPath) return null;
 
@@ -331,7 +417,11 @@ export class ESMResolver {
     const boundary = this.sfs.getPackageBoundary(parentSnapshotPath);
     if (!boundary?.imports) return null;
 
-    const resolved = resolveImports(boundary.imports, specifier, ESM_CONDITIONS);
+    const resolved = resolveImports(
+      boundary.imports,
+      specifier,
+      ESM_CONDITIONS,
+    );
     if (!resolved) return null;
 
     // Resolved target is relative to the package directory

@@ -11,11 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { stat } from 'fs/promises';
 
-import {
-  need,
-  system,
-  getNodeVersion,
-} from '@hakobu/hakobu-fetch';
+import { need, system, getNodeVersion } from '@hakobu/hakobu-fetch';
 // These are internal to hakobu-fetch but we import the compiled JS
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { EXPECTED_HASHES } = require('@hakobu/hakobu-fetch/lib-es5/expected');
@@ -27,22 +23,27 @@ const fetchPkg = require('@hakobu/hakobu-fetch/package.json');
 import { analyze } from './analyzer';
 import type { PackagingManifest, ManifestWarning } from './manifest';
 
-const {
-  hostArch,
-  hostPlatform,
-  knownArchs,
-  knownPlatforms,
-} = system;
+const { hostArch, hostPlatform, knownArchs, knownPlatforms } = system;
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared formatting
 // ─────────────────────────────────────────────────────────────────────
 
-function bold(s: string) { return `\x1b[1m${s}\x1b[0m`; }
-function green(s: string) { return `\x1b[32m${s}\x1b[0m`; }
-function yellow(s: string) { return `\x1b[33m${s}\x1b[0m`; }
-function red(s: string) { return `\x1b[31m${s}\x1b[0m`; }
-function dim(s: string) { return `\x1b[2m${s}\x1b[0m`; }
+function bold(s: string) {
+  return `\x1b[1m${s}\x1b[0m`;
+}
+function green(s: string) {
+  return `\x1b[32m${s}\x1b[0m`;
+}
+function yellow(s: string) {
+  return `\x1b[33m${s}\x1b[0m`;
+}
+function red(s: string) {
+  return `\x1b[31m${s}\x1b[0m`;
+}
+function dim(s: string) {
+  return `\x1b[2m${s}\x1b[0m`;
+}
 
 function severityIcon(s: string) {
   if (s === 'error') return red('x');
@@ -62,12 +63,19 @@ export async function commandTargets() {
   console.log();
 
   // Host
-  console.log(`  Host: ${bold(`${hostPlatform}-${hostArch}`)} (Node ${process.version})`);
+  console.log(
+    `  Host: ${bold(`${hostPlatform}-${hostArch}`)} (Node ${process.version})`,
+  );
   console.log(`  Base: Node ${nodeVersion}`);
   console.log();
 
   // Published targets from expected-shas.json
-  const published: { platform: string; arch: string; name: string; cached: boolean }[] = [];
+  const published: {
+    platform: string;
+    arch: string;
+    name: string;
+    cached: boolean;
+  }[] = [];
 
   for (const name of Object.keys(EXPECTED_HASHES)) {
     // name format: hakobu-base-v24.14.0-linux-x64
@@ -88,7 +96,9 @@ export async function commandTargets() {
     try {
       const s = await stat(cachedPath);
       cached = s.size > 0;
-    } catch { /* not cached */ }
+    } catch {
+      /* not cached */
+    }
 
     published.push({ platform, arch, name, cached });
   }
@@ -109,12 +119,18 @@ export async function commandTargets() {
     const label = `${t.platform}-${t.arch}`;
     const hostTag = isHost ? dim(' (host)') : '';
     const cacheTag = t.cached ? green(' cached') : dim(' remote');
-    console.log(`    ${t.cached ? green('*') : ' '} ${label}${hostTag}${cacheTag}`);
+    console.log(
+      `    ${t.cached ? green('*') : ' '} ${label}${hostTag}${cacheTag}`,
+    );
   }
 
   console.log();
   console.log(dim('  * = locally cached base binary'));
-  console.log(dim(`  Cache: ${localPlace({ from: 'fetched', arch: 'x64', nodeVersion, platform: 'linux', version: fetchVersion }).replace(/fetched-.*$/, '')}`));
+  console.log(
+    dim(
+      `  Cache: ${localPlace({ from: 'fetched', arch: 'x64', nodeVersion, platform: 'linux', version: fetchVersion }).replace(/fetched-.*$/, '')}`,
+    ),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -153,7 +169,9 @@ export async function commandInspect(projectRoot: string) {
   console.log();
   console.log(`  ${bold('Entry')}`);
   console.log(`    Path:      ${manifest.entry.snapshotPath}`);
-  console.log(`    Format:    ${manifest.entry.format === 'esm' ? green('ESM') : 'CJS'}`);
+  console.log(
+    `    Format:    ${manifest.entry.format === 'esm' ? green('ESM') : 'CJS'}`,
+  );
   console.log(`    Detected:  ${manifest.entry.formatSource}`);
 
   // Files summary
@@ -165,7 +183,9 @@ export async function commandInspect(projectRoot: string) {
 
   console.log();
   console.log(`  ${bold('Files')} (${files.length} total)`);
-  for (const [kind, count] of Object.entries(byKind).sort((a, b) => b[1] - a[1])) {
+  for (const [kind, count] of Object.entries(byKind).sort(
+    (a, b) => b[1] - a[1],
+  )) {
     console.log(`    ${kind}: ${count}`);
   }
 
@@ -197,9 +217,13 @@ export async function commandInspect(projectRoot: string) {
   // Externals
   if (manifest.externals.length > 0) {
     console.log();
-    console.log(`  ${bold('External Artifacts')} (${manifest.externals.length})`);
+    console.log(
+      `  ${bold('External Artifacts')} (${manifest.externals.length})`,
+    );
     for (const ext of manifest.externals) {
-      console.log(`    ${ext.name} ${ext.required ? red('required') : dim('optional')}`);
+      console.log(
+        `    ${ext.name} ${ext.required ? red('required') : dim('optional')}`,
+      );
     }
   }
 
@@ -215,7 +239,9 @@ export async function commandInspect(projectRoot: string) {
 
 export async function commandDoctor(projectRoot: string, targetSpec?: string) {
   if (!projectRoot) {
-    console.error(red('Usage: hakobu doctor <project-root> [--target node24-macos-arm64]'));
+    console.error(
+      red('Usage: hakobu doctor <project-root> [--target node24-macos-arm64]'),
+    );
     process.exit(1);
   }
 
@@ -228,7 +254,11 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
   console.log(bold('Hakobu Doctor'));
   console.log();
 
-  const checks: { name: string; status: 'ok' | 'warn' | 'fail'; detail: string }[] = [];
+  const checks: {
+    name: string;
+    status: 'ok' | 'warn' | 'fail';
+    detail: string;
+  }[] = [];
 
   // Check 1: Project root has package.json
   const pkgJsonPath = path.join(resolved, 'package.json');
@@ -243,7 +273,8 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
     checks.push({
       name: 'package.json',
       status: 'fail',
-      detail: 'Not found. Hakobu needs a package.json to determine the project name and entry.',
+      detail:
+        'Not found. Hakobu needs a package.json to determine the project name and entry.',
     });
   }
 
@@ -266,8 +297,8 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
 
   // Check 3: Analysis warnings
   if (manifest) {
-    const errors = manifest.warnings.filter(w => w.severity === 'error');
-    const warns = manifest.warnings.filter(w => w.severity === 'warning');
+    const errors = manifest.warnings.filter((w) => w.severity === 'error');
+    const warns = manifest.warnings.filter((w) => w.severity === 'warning');
 
     if (errors.length > 0) {
       checks.push({
@@ -313,7 +344,9 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
     try {
       const s = await stat(cachedPath);
       isCached = s.size > 0;
-    } catch { /* not cached */ }
+    } catch {
+      /* not cached */
+    }
 
     if (isCached) {
       checks.push({
@@ -332,7 +365,11 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
     checks.push({
       name: `Base binary (${target.platform}-${target.arch})`,
       status: 'fail',
-      detail: `No published base for ${target.platform}-${target.arch}. Available: ${Object.keys(EXPECTED_HASHES).map(n => n.replace(/^hakobu-base-v[\d.]+-/, '')).join(', ')}`,
+      detail: `No published base for ${target.platform}-${target.arch}. Available: ${Object.keys(
+        EXPECTED_HASHES,
+      )
+        .map((n) => n.replace(/^hakobu-base-v[\d.]+-/, ''))
+        .join(', ')}`,
     });
   }
 
@@ -356,7 +393,12 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
   // Print results
   let hasFailure = false;
   for (const check of checks) {
-    const icon = check.status === 'ok' ? green('OK') : check.status === 'warn' ? yellow('!!') : red('XX');
+    const icon =
+      check.status === 'ok'
+        ? green('OK')
+        : check.status === 'warn'
+          ? yellow('!!')
+          : red('XX');
     console.log(`  ${icon}  ${check.name}`);
     console.log(`      ${check.detail}`);
     if (check.status === 'fail') hasFailure = true;
@@ -369,7 +411,9 @@ export async function commandDoctor(projectRoot: string, targetSpec?: string) {
 
   console.log();
   if (hasFailure) {
-    console.log(red('  Some checks failed. Fix the issues above before packaging.'));
+    console.log(
+      red('  Some checks failed. Fix the issues above before packaging.'),
+    );
   } else {
     console.log(green('  All checks passed. Ready to package.'));
   }
@@ -391,7 +435,10 @@ function printWarnings(warnings: ManifestWarning[]) {
   }
 }
 
-function parseTargetForDoctor(spec?: string): { platform: string; arch: string } {
+function parseTargetForDoctor(spec?: string): {
+  platform: string;
+  arch: string;
+} {
   if (!spec) {
     return { platform: hostPlatform, arch: hostArch };
   }

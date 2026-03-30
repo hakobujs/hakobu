@@ -35,10 +35,16 @@ import producer from './producer';
 import { CompressType } from './compress_type';
 import { plusx } from './chmod';
 import {
-  patchMachOExecutable, signMachOExecutable, notarizeMachOExecutable,
-  signAppBundle, notarizeAppBundle,
+  patchMachOExecutable,
+  signMachOExecutable,
+  notarizeMachOExecutable,
+  signAppBundle,
+  notarizeAppBundle,
 } from './mach-o';
-import { signWindowsExecutable, hasWindowsSigningCredentials } from './windows-sign';
+import {
+  signWindowsExecutable,
+  hasWindowsSigningCredentials,
+} from './windows-sign';
 import { injectPeMetadata } from './pe-metadata';
 import type { ExeMetadata } from './pe-metadata';
 import { createAppBundle } from './app-bundle';
@@ -194,7 +200,9 @@ function prepareBaseBinary(
   fs.copyFileSync(binaryPath, stripped);
 
   try {
-    execFileSync('codesign', ['--remove-signature', stripped], { stdio: 'pipe' });
+    execFileSync('codesign', ['--remove-signature', stripped], {
+      stdio: 'pipe',
+    });
   } catch {
     // Some cache entries are already unsigned; stripping is best-effort.
   }
@@ -214,8 +222,13 @@ function prepareBaseBinary(
 // ─────────────────────────────────────────────────────────────────────
 
 const ALL_TARGETS = [
-  'node24-linux-x64', 'node24-linux-arm64', 'node24-win-x64', 'node24-win-arm64',
-  'node24-macos-arm64', 'node24-macos-x64', 'node24-linuxstatic-x64',
+  'node24-linux-x64',
+  'node24-linux-arm64',
+  'node24-win-x64',
+  'node24-win-arm64',
+  'node24-macos-arm64',
+  'node24-macos-x64',
+  'node24-linuxstatic-x64',
 ];
 
 export interface PackageMultipleOptions {
@@ -258,9 +271,9 @@ export async function packageMultiple(
   const outputDir = path.resolve(options.outputDir || '.');
 
   // Expand 'all' target
-  const targetSpecs = options.targets.flatMap(t =>
-    t === 'all' ? ALL_TARGETS : t.split(','),
-  ).filter(Boolean);
+  const targetSpecs = options.targets
+    .flatMap((t) => (t === 'all' ? ALL_TARGETS : t.split(',')))
+    .filter(Boolean);
 
   if (targetSpecs.length === 0) {
     throw new Error('No targets specified.');
@@ -271,17 +284,22 @@ export async function packageMultiple(
     const result = await packageApp({
       ...options,
       target: targetSpecs[0],
-      output: path.join(outputDir, defaultOutputName(
-        appIdFromProject(projectRoot),
-        parseTarget(targetSpecs[0]),
-      )),
+      output: path.join(
+        outputDir,
+        defaultOutputName(
+          appIdFromProject(projectRoot),
+          parseTarget(targetSpecs[0]),
+        ),
+      ),
     });
-    return [{
-      target: result.target,
-      status: 'success',
-      outputPath: result.outputPath,
-      fileCount: result.fileCount,
-    }];
+    return [
+      {
+        target: result.target,
+        status: 'success',
+        outputPath: result.outputPath,
+        fileCount: result.fileCount,
+      },
+    ];
   }
 
   log.info(`Multi-target packaging: ${targetSpecs.length} targets`);
@@ -293,13 +311,15 @@ export async function packageMultiple(
 
   if (options.bundle) {
     log.info('Bundling project (shared across all targets)...');
-    const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
+    const bundlerName =
+      typeof options.bundle === 'string' ? options.bundle : 'rolldown';
     const adapter = getAdapter(bundlerName);
     const entry = options.entry || resolveEntryForBundle(projectRoot);
     const appName = appIdFromProject(projectRoot);
 
     bundleOutput = await adapter.bundle({
-      projectRoot, entry,
+      projectRoot,
+      entry,
       external: options.bundleExternal,
       appName,
     });
@@ -309,10 +329,7 @@ export async function packageMultiple(
     }
 
     effectiveRoot = bundleOutput.projectRoot;
-    const bundleAssets = [
-      ...(options.assets || []),
-      ...bundleOutput.mapFiles,
-    ];
+    const bundleAssets = [...(options.assets || []), ...bundleOutput.mapFiles];
     effectiveOptions = {
       ...effectiveOptions,
       entry: undefined,
@@ -329,25 +346,31 @@ export async function packageMultiple(
     externals: effectiveOptions.externals,
   });
 
-  log.info(`  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`);
+  log.info(
+    `  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`,
+  );
   log.info(`  files: ${Object.keys(manifest.files).length}`);
 
   // ── Pre-fetch: download all base binaries in parallel ──
   // Each target has a unique platform-arch, so no cache file races.
-  const parsedTargets = targetSpecs.map(spec => ({
+  const parsedTargets = targetSpecs.map((spec) => ({
     spec,
     ...parseTarget(spec),
   }));
 
   log.info(`\nFetching ${parsedTargets.length} base binaries...`);
   const fetchResults = await Promise.allSettled(
-    parsedTargets.map(t =>
-      need({ nodeRange: t.nodeRange, platform: t.platform, arch: t.arch, forceBuild: options.forceBuild })
-        .then(binaryPath => {
-          log.info(`  fetched: ${t.platform}-${t.arch}`);
-          return binaryPath;
-        })
-    )
+    parsedTargets.map((t) =>
+      need({
+        nodeRange: t.nodeRange,
+        platform: t.platform,
+        arch: t.arch,
+        forceBuild: options.forceBuild,
+      }).then((binaryPath) => {
+        log.info(`  fetched: ${t.platform}-${t.arch}`);
+        return binaryPath;
+      }),
+    ),
   );
 
   // Map fetch results by spec for lookup during per-target assembly
@@ -374,7 +397,10 @@ export async function packageMultiple(
     const prefetchedBinary = fetchedBinaries.get(spec);
     if (!prefetchedBinary) {
       const fetchResult = fetchResults[targetSpecs.indexOf(spec)];
-      const fetchError = fetchResult.status === 'rejected' ? fetchResult.reason?.message : 'unknown';
+      const fetchError =
+        fetchResult.status === 'rejected'
+          ? fetchResult.reason?.message
+          : 'unknown';
       results.push({
         target: targetSpec,
         status: 'failed',
@@ -387,7 +413,11 @@ export async function packageMultiple(
 
     try {
       const result = await packageAppForTarget(
-        effectiveRoot, manifest, targetSpec, outputPath, effectiveOptions,
+        effectiveRoot,
+        manifest,
+        targetSpec,
+        outputPath,
+        effectiveOptions,
       );
       const sizeMB = fs.existsSync(result.outputPath)
         ? (fs.statSync(result.outputPath).size / 1024 / 1024).toFixed(0) + ' MB'
@@ -424,8 +454,8 @@ export async function packageMultiple(
     }
   }
 
-  const ok = results.filter(r => r.status === 'success').length;
-  const fail = results.filter(r => r.status === 'failed').length;
+  const ok = results.filter((r) => r.status === 'success').length;
+  const fail = results.filter((r) => r.status === 'failed').length;
   log.info(`\n${ok} succeeded, ${fail} failed`);
 
   return results;
@@ -454,17 +484,28 @@ async function packageAppForTarget(
 
   try {
     // Build payload
-    const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
+    const { records, entrypoint, symLinks } = manifestToRecords(
+      manifest,
+      options.bytecode,
+    );
     const slash = targetSpec.platform === 'win' ? '\\' : '/';
-    const backpack = packer({ records, entrypoint, bytecode: !!options.bytecode, symLinks });
+    const backpack = packer({
+      records,
+      entrypoint,
+      bytecode: !!options.bytecode,
+      symLinks,
+    });
 
     // In app-bundle/appdir mode, write the raw executable to a temp path
-    const usesTempOutput = (options.appBundle && targetSpec.platform === 'macos')
-      || (options.appDir && isLinuxPlatform(targetSpec.platform));
+    const usesTempOutput =
+      (options.appBundle && targetSpec.platform === 'macos') ||
+      (options.appDir && isLinuxPlatform(targetSpec.platform));
     const producerOutput = usesTempOutput
       ? path.join(os.tmpdir(), `hakobu-wrap-${manifest.appId}-${Date.now()}`)
       : outputPath;
-    fs.mkdirSync(path.dirname(path.resolve(producerOutput)), { recursive: true });
+    fs.mkdirSync(path.dirname(path.resolve(producerOutput)), {
+      recursive: true,
+    });
 
     const target: Target = {
       nodeRange: targetSpec.nodeRange,
@@ -493,8 +534,13 @@ async function packageAppForTarget(
     ]);
 
     await producer({
-      backpack, bakes: options.options || [], slash, target, symLinks,
-      doCompress: resolveCompressType(options.compress), nativeBuild: false,
+      backpack,
+      bakes: options.options || [],
+      slash,
+      target,
+      symLinks,
+      doCompress: resolveCompressType(options.compress),
+      nativeBuild: false,
     });
 
     // Post-production
@@ -515,14 +561,18 @@ async function packageAppForTarget(
           macos: options.macos,
         });
 
-        try { signAppBundle(finalOutputPath, options.signIdentity); } catch {}
+        try {
+          signAppBundle(finalOutputPath, options.signIdentity);
+        } catch {}
 
         if (options.notarize) {
           await notarizeAppBundle({ executable: finalOutputPath });
         }
       } else {
         // Raw executable mode: sign/notarize the executable directly
-        try { signMachOExecutable(target.output, options.signIdentity); } catch {}
+        try {
+          signMachOExecutable(target.output, options.signIdentity);
+        } catch {}
 
         if (options.notarize) {
           await notarizeMachOExecutable({ executable: target.output });
@@ -559,7 +609,9 @@ async function packageAppForTarget(
             outputPath: outputPath,
             arch: targetSpec.arch,
           });
-          try { fs.rmSync(appDirPath, { recursive: true, force: true }); } catch {}
+          try {
+            fs.rmSync(appDirPath, { recursive: true, force: true });
+          } catch {}
         } else {
           finalOutputPath = appDirPath;
         }
@@ -591,7 +643,10 @@ function appIdFromProject(projectRoot: string): string {
   return 'app';
 }
 
-function defaultOutputName(appId: string, target: { platform: string; arch: string }): string {
+function defaultOutputName(
+  appId: string,
+  target: { platform: string; arch: string },
+): string {
   const ext = target.platform === 'win' ? '.exe' : '';
   return `${appId}-${target.platform}-${target.arch}${ext}`;
 }
@@ -600,14 +655,16 @@ function defaultOutputName(appId: string, target: { platform: string; arch: stri
 // Core package function (single target — unchanged)
 // ─────────────────────────────────────────────────────────────────────
 
-export async function packageApp(options: PackageOptions): Promise<PackageResult> {
+export async function packageApp(
+  options: PackageOptions,
+): Promise<PackageResult> {
   // ── App bundle validation ──
   if (options.appBundle) {
     const targetSpec = parseTarget(options.target || '');
     if (targetSpec.platform !== 'macos') {
       throw new Error(
         `--app-bundle is only supported for macOS targets (got ${targetSpec.platform}).\n` +
-        'macOS .app bundles require a Mach-O executable.'
+          'macOS .app bundles require a Mach-O executable.',
       );
     }
   }
@@ -623,7 +680,7 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
     if (!isLinuxPlatform(targetSpec.platform)) {
       throw new Error(
         `--appdir is only supported for Linux targets (got ${targetSpec.platform}).\n` +
-        'AppDir requires an ELF executable.'
+          'AppDir requires an ELF executable.',
       );
     }
   }
@@ -632,8 +689,8 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
   if (options.bytecode && options.bundle) {
     throw new Error(
       'Bytecode mode (--bytecode) cannot be combined with bundle mode (--bundle).\n' +
-      'Bundle mode produces ESM output which is not compatible with V8 bytecode compilation.\n' +
-      'Use one or the other, not both.'
+        'Bundle mode produces ESM output which is not compatible with V8 bytecode compilation.\n' +
+        'Use one or the other, not both.',
     );
   }
 
@@ -644,7 +701,8 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
   if (options.bundle) {
     log.info('Bundling project...');
 
-    const bundlerName = typeof options.bundle === 'string' ? options.bundle : 'rolldown';
+    const bundlerName =
+      typeof options.bundle === 'string' ? options.bundle : 'rolldown';
     const adapter = getAdapter(bundlerName);
 
     // Determine entry for bundling
@@ -675,11 +733,12 @@ export async function packageApp(options: PackageOptions): Promise<PackageResult
     projectRoot = bundleOutput.projectRoot;
     // Clear entry override — the bundle's package.json has the right main
     // Include source map files as assets so they end up in the snapshot
-    const bundleAssets = [
-      ...(options.assets || []),
-      ...bundleOutput.mapFiles,
-    ];
-    options = { ...options, entry: undefined, assets: bundleAssets.length > 0 ? bundleAssets : undefined };
+    const bundleAssets = [...(options.assets || []), ...bundleOutput.mapFiles];
+    options = {
+      ...options,
+      entry: undefined,
+      assets: bundleAssets.length > 0 ? bundleAssets : undefined,
+    };
   }
 
   try {
@@ -700,7 +759,12 @@ function resolveEntryForBundle(projectRoot: string): string {
     } catch {}
   }
   // Fallback: common entry patterns
-  for (const candidate of ['src/index.ts', 'src/index.js', 'index.ts', 'index.js']) {
+  for (const candidate of [
+    'src/index.ts',
+    'src/index.js',
+    'index.ts',
+    'index.js',
+  ]) {
     if (fs.existsSync(path.join(projectRoot, candidate))) return candidate;
   }
   throw new Error('Cannot determine entry for bundling. Specify --entry.');
@@ -721,7 +785,9 @@ async function packageAppInner(
     externals: options.externals,
   });
 
-  log.info(`  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`);
+  log.info(
+    `  entry: ${manifest.entry.snapshotPath} (${manifest.entry.format})`,
+  );
   log.info(`  files: ${Object.keys(manifest.files).length}`);
 
   log.debug('Manifest details:', [
@@ -746,7 +812,9 @@ async function packageAppInner(
 
   // ── 2. Parse target ──
   const targetSpec = parseTarget(options.target);
-  log.info(`Target: ${targetSpec.nodeRange}-${targetSpec.platform}-${targetSpec.arch}`);
+  log.info(
+    `Target: ${targetSpec.nodeRange}-${targetSpec.platform}-${targetSpec.arch}`,
+  );
 
   // ── 3. Fetch base binary ──
   log.info('Fetching base binary...');
@@ -770,7 +838,10 @@ async function packageAppInner(
     // ── 4. Bridge: manifest → inherited FileRecords + Stripe format ──
     log.info('Building payload...');
 
-    const { records, entrypoint, symLinks } = manifestToRecords(manifest, options.bytecode);
+    const { records, entrypoint, symLinks } = manifestToRecords(
+      manifest,
+      options.bytecode,
+    );
 
     // ── 5. Pack using inherited packer ──
     const slash = targetSpec.platform === 'win' ? '\\' : '/';
@@ -782,10 +853,12 @@ async function packageAppInner(
     });
 
     // ── 6. Build target object for producer ──
-    const requestedOutput = options.output || defaultOutputPath(manifest.appId, targetSpec);
+    const requestedOutput =
+      options.output || defaultOutputPath(manifest.appId, targetSpec);
     // In app-bundle/appdir mode, the producer writes to a temp file; wrapper moves it in
-    const usesTempOutput = (options.appBundle && targetSpec.platform === 'macos')
-      || (options.appDir && isLinuxPlatform(targetSpec.platform));
+    const usesTempOutput =
+      (options.appBundle && targetSpec.platform === 'macos') ||
+      (options.appDir && isLinuxPlatform(targetSpec.platform));
     const outputPath = usesTempOutput
       ? path.join(os.tmpdir(), `hakobu-wrap-${manifest.appId}-${Date.now()}`)
       : requestedOutput;
@@ -829,7 +902,9 @@ async function packageAppInner(
     });
 
     // ── 8. Post-production: signing + chmod ──
-    log.debug(`Post-production: platform=${targetSpec.platform}, appBundle=${!!options.appBundle}, appDir=${!!options.appDir}`);
+    log.debug(
+      `Post-production: platform=${targetSpec.platform}, appBundle=${!!options.appBundle}, appDir=${!!options.appDir}`,
+    );
     let finalOutputPath = path.resolve(requestedOutput);
 
     if (targetSpec.platform === 'macos') {
@@ -851,7 +926,9 @@ async function packageAppInner(
           signAppBundle(finalOutputPath, options.signIdentity);
         } catch {
           if (targetSpec.arch === 'arm64') {
-            log.warn('Unable to sign the macOS app bundle — it may not run on ARM64.');
+            log.warn(
+              'Unable to sign the macOS app bundle — it may not run on ARM64.',
+            );
           }
         }
 
@@ -864,7 +941,9 @@ async function packageAppInner(
           signMachOExecutable(target.output, options.signIdentity);
         } catch {
           if (targetSpec.arch === 'arm64') {
-            log.warn('Unable to sign the macOS executable — it may not run on ARM64.');
+            log.warn(
+              'Unable to sign the macOS executable — it may not run on ARM64.',
+            );
           }
         }
 
@@ -902,7 +981,9 @@ async function packageAppInner(
             outputPath: requestedOutput,
             arch: targetSpec.arch,
           });
-          try { fs.rmSync(appDirPath, { recursive: true, force: true }); } catch {}
+          try {
+            fs.rmSync(appDirPath, { recursive: true, force: true });
+          } catch {}
         } else {
           finalOutputPath = appDirPath;
         }
@@ -911,7 +992,9 @@ async function packageAppInner(
 
     shutdownFabricator();
 
-    log.info(`Done. Packaged ${Object.keys(manifest.files).length} files → ${finalOutputPath}`);
+    log.info(
+      `Done. Packaged ${Object.keys(manifest.files).length} files → ${finalOutputPath}`,
+    );
 
     return {
       outputPath: finalOutputPath,
@@ -928,7 +1011,10 @@ async function packageAppInner(
 // Bridge: manifest → inherited FileRecords
 // ─────────────────────────────────────────────────────────────────────
 
-function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
+function manifestToRecords(
+  manifest: PackagingManifest,
+  bytecode?: boolean,
+): {
   records: FileRecords;
   entrypoint: string;
   symLinks: SymLinks;
@@ -974,7 +1060,9 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
     dirContents.get(dir)!.push(path.basename(absPath));
 
     // Walk up and register intermediate directories as children of their parents
-    const projectRoot = fs.realpathSync(manifest.projectRoot || path.dirname(manifest.entry.absolutePath));
+    const projectRoot = fs.realpathSync(
+      manifest.projectRoot || path.dirname(manifest.entry.absolutePath),
+    );
     while (dir !== projectRoot && dir !== path.dirname(dir)) {
       const parent = path.dirname(dir);
       if (!dirContents.has(parent)) dirContents.set(parent, []);
@@ -991,7 +1079,10 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
   // and ESM entries need the hooks for all import resolution.
   let entrypoint = manifest.entry.absolutePath;
 
-  const { shimPath, shimContent, shimDir } = buildEsmBridge(manifest, isEsmEntry);
+  const { shimPath, shimContent, shimDir } = buildEsmBridge(
+    manifest,
+    isEsmEntry,
+  );
   records[shimPath] = {
     file: shimPath,
     body: shimContent,
@@ -1046,7 +1137,10 @@ function manifestToRecords(manifest: PackagingManifest, bytecode?: boolean): {
  * For ESM entries: registers hooks + import()s the real entry
  * For CJS entries: registers hooks + require()s the real entry
  */
-function buildEsmBridge(manifest: PackagingManifest, isEsm: boolean = true): {
+function buildEsmBridge(
+  manifest: PackagingManifest,
+  isEsm: boolean = true,
+): {
   shimPath: string;
   shimContent: Buffer;
   shimDir: string;
@@ -1057,8 +1151,8 @@ function buildEsmBridge(manifest: PackagingManifest, isEsm: boolean = true): {
 
   // Collect package.json paths for module format detection at runtime
   const pkgJsonAbsPaths = Object.values(manifest.files)
-    .filter(f => f.kind === 'package-json')
-    .map(f => f.absolutePath);
+    .filter((f) => f.kind === 'package-json')
+    .map((f) => f.absolutePath);
 
   const shimSource = `'use strict';
 // Hakobu ESM Bridge — bootstraps ESM loading from the inherited CJS VFS
@@ -1271,10 +1365,12 @@ registerHooks({
 
 // Load the real entry
 var entryCanonical = '${snapshotify(entryAbsPath, '/').replace(/\\/g, '/')}';
-${isEsm
-  ? `var entryUrl = canonicalToUrl(entryCanonical);
+${
+  isEsm
+    ? `var entryUrl = canonicalToUrl(entryCanonical);
 import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });`
-  : `require(toNative(entryCanonical));`}
+    : `require(toNative(entryCanonical));`
+}
 `;
 
   return {
@@ -1291,13 +1387,20 @@ import(entryUrl).catch(function(err) { console.error(err); process.exit(1); });`
 function resolveCompressType(value?: 'brotli' | 'gzip'): CompressType {
   if (!value) return CompressType.None;
   switch (value) {
-    case 'brotli': return CompressType.Brotli;
-    case 'gzip': return CompressType.GZip;
-    default: return CompressType.None;
+    case 'brotli':
+      return CompressType.Brotli;
+    case 'gzip':
+      return CompressType.GZip;
+    default:
+      return CompressType.None;
   }
 }
 
-function parseTarget(spec?: string): { nodeRange: string; platform: string; arch: string } {
+function parseTarget(spec?: string): {
+  nodeRange: string;
+  platform: string;
+  arch: string;
+} {
   if (!spec || spec === 'host') {
     return {
       nodeRange: 'node24',
@@ -1313,14 +1416,18 @@ function parseTarget(spec?: string): { nodeRange: string; platform: string; arch
 
   for (const part of parts) {
     if (part.startsWith('node')) nodeRange = part;
-    else if (['linux', 'macos', 'win', 'alpine', 'linuxstatic'].includes(part)) platform = part;
+    else if (['linux', 'macos', 'win', 'alpine', 'linuxstatic'].includes(part))
+      platform = part;
     else if (['x64', 'arm64'].includes(part)) arch = part;
   }
 
   return { nodeRange, platform, arch };
 }
 
-function defaultOutputPath(appId: string, target: { platform: string; arch: string }): string {
+function defaultOutputPath(
+  appId: string,
+  target: { platform: string; arch: string },
+): string {
   const ext = target.platform === 'win' ? '.exe' : '';
   return path.resolve(`${appId}-${target.platform}-${target.arch}${ext}`);
 }

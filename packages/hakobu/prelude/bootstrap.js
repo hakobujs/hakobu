@@ -2186,7 +2186,8 @@ function payloadFileSync(pointer) {
   // Native addons will be extracted to: <base>/pkg/<hash>
   function resolveNativeCacheBase() {
     if (process.env.HAKOBU_ADDON_CACHE) return process.env.HAKOBU_ADDON_CACHE;
-    if (process.env.PKG_NATIVE_CACHE_PATH) return process.env.PKG_NATIVE_CACHE_PATH;
+    if (process.env.PKG_NATIVE_CACHE_PATH)
+      return process.env.PKG_NATIVE_CACHE_PATH;
     try {
       var home = homedir();
       if (home) {
@@ -2194,7 +2195,9 @@ function payloadFileSync(pointer) {
         fs.mkdirSync(cachePath, { recursive: true });
         return cachePath;
       }
-    } catch (e) { /* home unavailable or unwritable */ }
+    } catch (e) {
+      /* home unavailable or unwritable */
+    }
     return os.tmpdir();
   }
   const PKG_NATIVE_CACHE_BASE = resolveNativeCacheBase();

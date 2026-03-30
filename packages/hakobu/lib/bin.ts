@@ -127,19 +127,66 @@ async function main() {
   }
 
   const argv = minimist(process.argv.slice(2), {
-    string: ['target', 'targets', 'output', 'entry', 'external', 'config',
-             'out-path', 'outdir', 'out-dir', 'compress', 'public-packages',
-             'options', 'no-dict', 'sign-identity', 'win-cert', 'win-cert-password',
-             'product-name', 'file-description', 'company-name', 'file-version',
-             'product-version', 'icon',
-             'bundle-id', 'bundle-version', 'short-version', 'display-name', 'copyright',
-             'macos-icon', 'desktop-name', 'desktop-comment', 'desktop-categories',
-             'linux-icon'],
-    boolean: ['help', 'version', 'bytecode', 'no-bytecode', 'build', 'public', 'sea',
-              'no-native-build', 'notarize', 'app-bundle', 'appdir',
-              'desktop-terminal', 'no-desktop-terminal', 'appimage'],
-    alias: { h: 'help', v: 'version', o: 'output', t: 'target',
-             c: 'config', b: 'build', d: 'debug', C: 'compress' },
+    string: [
+      'target',
+      'targets',
+      'output',
+      'entry',
+      'external',
+      'config',
+      'out-path',
+      'outdir',
+      'out-dir',
+      'compress',
+      'public-packages',
+      'options',
+      'no-dict',
+      'sign-identity',
+      'win-cert',
+      'win-cert-password',
+      'product-name',
+      'file-description',
+      'company-name',
+      'file-version',
+      'product-version',
+      'icon',
+      'bundle-id',
+      'bundle-version',
+      'short-version',
+      'display-name',
+      'copyright',
+      'macos-icon',
+      'desktop-name',
+      'desktop-comment',
+      'desktop-categories',
+      'linux-icon',
+    ],
+    boolean: [
+      'help',
+      'version',
+      'bytecode',
+      'no-bytecode',
+      'build',
+      'public',
+      'sea',
+      'no-native-build',
+      'notarize',
+      'app-bundle',
+      'appdir',
+      'desktop-terminal',
+      'no-desktop-terminal',
+      'appimage',
+    ],
+    alias: {
+      h: 'help',
+      v: 'version',
+      o: 'output',
+      t: 'target',
+      c: 'config',
+      b: 'build',
+      d: 'debug',
+      C: 'compress',
+    },
   });
 
   if (argv.version) {
@@ -200,7 +247,9 @@ async function main() {
 
       const hasUnsupported = printConfigWarnings(warnings);
       if (hasUnsupported) {
-        log.error('Unsupported options detected. Remove them or see migration guidance above.');
+        log.error(
+          'Unsupported options detected. Remove them or see migration guidance above.',
+        );
         process.exit(1);
       }
 
@@ -212,7 +261,8 @@ async function main() {
       if (argv['sign-identity']) options.signIdentity = argv['sign-identity'];
       if (argv.notarize) options.notarize = true;
       if (argv['win-cert']) options.winCertPath = argv['win-cert'];
-      if (argv['win-cert-password']) options.winCertPassword = argv['win-cert-password'];
+      if (argv['win-cert-password'])
+        options.winCertPassword = argv['win-cert-password'];
 
       // App bundle / AppDir
       if (argv['app-bundle']) options.appBundle = true;
@@ -222,7 +272,8 @@ async function main() {
       // macOS bundle metadata — CLI flags override config
       const cliMacos: Record<string, string> = {};
       if (argv['bundle-id']) cliMacos.bundleId = argv['bundle-id'];
-      if (argv['bundle-version']) cliMacos.bundleVersion = argv['bundle-version'];
+      if (argv['bundle-version'])
+        cliMacos.bundleVersion = argv['bundle-version'];
       if (argv['short-version']) cliMacos.shortVersion = argv['short-version'];
       if (argv['display-name']) cliMacos.displayName = argv['display-name'];
       if (argv.copyright) cliMacos.copyright = argv.copyright;
@@ -235,7 +286,8 @@ async function main() {
       const cliLinux: Record<string, any> = {};
       if (argv['desktop-name']) cliLinux.name = argv['desktop-name'];
       if (argv['desktop-comment']) cliLinux.comment = argv['desktop-comment'];
-      if (argv['desktop-categories']) cliLinux.categories = argv['desktop-categories'];
+      if (argv['desktop-categories'])
+        cliLinux.categories = argv['desktop-categories'];
       if (argv['desktop-terminal']) cliLinux.terminal = true;
       if (argv['no-desktop-terminal']) cliLinux.terminal = false;
       if (argv['linux-icon']) cliLinux.iconPath = argv['linux-icon'];
@@ -246,10 +298,12 @@ async function main() {
       // PE metadata — CLI flags override config
       const cliMeta: Record<string, string> = {};
       if (argv['product-name']) cliMeta.productName = argv['product-name'];
-      if (argv['file-description']) cliMeta.fileDescription = argv['file-description'];
+      if (argv['file-description'])
+        cliMeta.fileDescription = argv['file-description'];
       if (argv['company-name']) cliMeta.companyName = argv['company-name'];
       if (argv['file-version']) cliMeta.fileVersion = argv['file-version'];
-      if (argv['product-version']) cliMeta.productVersion = argv['product-version'];
+      if (argv['product-version'])
+        cliMeta.productVersion = argv['product-version'];
       if (argv.icon) cliMeta.icon = argv.icon;
       if (Object.keys(cliMeta).length > 0) {
         options.metadata = { ...options.metadata, ...cliMeta };
@@ -279,7 +333,7 @@ async function main() {
           options: options.options,
           forceBuild: options.forceBuild,
         });
-        const failed = results.filter(r => r.status === 'failed');
+        const failed = results.filter((r) => r.status === 'failed');
         if (failed.length > 0) process.exit(1);
       } else {
         await packageApp(options);

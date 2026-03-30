@@ -30,7 +30,12 @@ import type {
   DiagnosticSeverity,
   WarningCategory,
 } from './manifest';
-import { resolveExports, resolveImports, ESM_CONDITIONS, CJS_CONDITIONS } from './exports-resolver';
+import {
+  resolveExports,
+  resolveImports,
+  ESM_CONDITIONS,
+  CJS_CONDITIONS,
+} from './exports-resolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Analyzer options
@@ -77,13 +82,18 @@ interface RawPackageJson {
   pkg?: { scripts?: string[]; assets?: string[] };
 }
 
-const packageJsonCache = new Map<string, { path: string; data: RawPackageJson } | null>();
+const packageJsonCache = new Map<
+  string,
+  { path: string; data: RawPackageJson } | null
+>();
 
 // ─────────────────────────────────────────────────────────────────────
 // Package.json utilities
 // ─────────────────────────────────────────────────────────────────────
 
-function findNearestPackageJson(fromDir: string): { path: string; data: RawPackageJson } | null {
+function findNearestPackageJson(
+  fromDir: string,
+): { path: string; data: RawPackageJson } | null {
   const root = path.parse(fromDir).root;
   let dir = fromDir;
   const visited: string[] = [];
@@ -99,7 +109,9 @@ function findNearestPackageJson(fromDir: string): { path: string; data: RawPacka
     const pjPath = path.join(dir, 'package.json');
     if (fs.existsSync(pjPath)) {
       try {
-        const data = JSON.parse(fs.readFileSync(pjPath, 'utf8')) as RawPackageJson;
+        const data = JSON.parse(
+          fs.readFileSync(pjPath, 'utf8'),
+        ) as RawPackageJson;
         const result = { path: pjPath, data };
         for (const d of visited) packageJsonCache.set(d, result);
         return result;
@@ -129,7 +141,7 @@ function readPackageJson(pjPath: string): RawPackageJson | null {
 
 function detectModuleFormat(
   filePath: string,
-  explicitFormat?: ModuleFormat
+  explicitFormat?: ModuleFormat,
 ): { format: ModuleFormat; source: FormatSource } {
   if (explicitFormat) {
     return { format: explicitFormat, source: 'explicit' };
@@ -144,7 +156,8 @@ function detectModuleFormat(
 
   // Node 24 rule 3: .js → check nearest package.json "type"
   const pj = findNearestPackageJson(path.dirname(filePath));
-  if (pj?.data.type === 'module') return { format: 'esm', source: 'package-type' };
+  if (pj?.data.type === 'module')
+    return { format: 'esm', source: 'package-type' };
 
   // Default: CJS (Node's default when no "type" field)
   return { format: 'cjs', source: 'package-type' };
@@ -191,7 +204,11 @@ function classifyFile(filePath: string): FileKind {
 // Snapshot path computation
 // ─────────────────────────────────────────────────────────────────────
 
-function toSnapshotPath(absolutePath: string, projectRoot: string, appId: string): string {
+function toSnapshotPath(
+  absolutePath: string,
+  projectRoot: string,
+  appId: string,
+): string {
   const relative = path.relative(projectRoot, absolutePath);
   const posix = relative.split(path.sep).join('/');
   return `/snapshot/${appId}/${posix}`;
@@ -211,7 +228,10 @@ interface ExtractedDep {
   dirHint?: string;
 }
 
-function extractDependencies(filePath: string, format: ModuleFormat): ExtractedDep[] {
+function extractDependencies(
+  filePath: string,
+  format: ModuleFormat,
+): ExtractedDep[] {
   let source: string;
   try {
     source = fs.readFileSync(filePath, 'utf8');
@@ -227,13 +247,18 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
    */
   function extractDirHint(node: any): string | undefined {
     // path.join(__dirname, 'subdir', ...)
-    if (node.type === 'CallExpression' &&
-        node.callee?.type === 'MemberExpression' &&
-        node.callee.property?.name === 'join' &&
-        node.arguments?.length >= 3) {
+    if (
+      node.type === 'CallExpression' &&
+      node.callee?.type === 'MemberExpression' &&
+      node.callee.property?.name === 'join' &&
+      node.arguments?.length >= 3
+    ) {
       const args = node.arguments;
-      if (args[0]?.type === 'Identifier' && args[0].name === '__dirname' &&
-          args[1]?.type === 'StringLiteral') {
+      if (
+        args[0]?.type === 'Identifier' &&
+        args[0].name === '__dirname' &&
+        args[1]?.type === 'StringLiteral'
+      ) {
         return args[1].value;
       }
     }
@@ -241,8 +266,11 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
     if (node.type === 'BinaryExpression' && node.operator === '+') {
       const left = node.left;
       if (left?.type === 'BinaryExpression' && left.operator === '+') {
-        if (left.left?.type === 'Identifier' && left.left.name === '__dirname' &&
-            left.right?.type === 'StringLiteral') {
+        if (
+          left.left?.type === 'Identifier' &&
+          left.left.name === '__dirname' &&
+          left.right?.type === 'StringLiteral'
+        ) {
           const dir = left.right.value.replace(/^\/|\/$/g, '');
           if (dir) return dir;
         }
@@ -264,40 +292,73 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
 
     traverse(ast, {
       ImportDeclaration(p) {
-        deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'import' });
+        deps.push({
+          specifier: p.node.source.value,
+          dynamic: false,
+          kind: 'import',
+        });
       },
 
       CallExpression(p) {
         const { callee, arguments: args } = p.node;
 
         // require(...)
-        if (callee.type === 'Identifier' && callee.name === 'require' && args.length >= 1) {
+        if (
+          callee.type === 'Identifier' &&
+          callee.name === 'require' &&
+          args.length >= 1
+        ) {
           if (args[0].type === 'StringLiteral') {
-            deps.push({ specifier: args[0].value, dynamic: false, kind: 'require' });
+            deps.push({
+              specifier: args[0].value,
+              dynamic: false,
+              kind: 'require',
+            });
           } else {
             // Try to extract directory hint from path.join(__dirname, 'subdir', variable)
             const dirHint = extractDirHint(args[0]);
-            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'require', dirHint });
+            deps.push({
+              specifier: '<dynamic>',
+              dynamic: true,
+              kind: 'require',
+              dirHint,
+            });
           }
         }
 
         // import(...)
         if (callee.type === 'Import' && args.length >= 1) {
           if (args[0].type === 'StringLiteral') {
-            deps.push({ specifier: args[0].value, dynamic: false, kind: 'import-dynamic' });
+            deps.push({
+              specifier: args[0].value,
+              dynamic: false,
+              kind: 'import-dynamic',
+            });
           } else {
-            deps.push({ specifier: '<dynamic>', dynamic: true, kind: 'import-dynamic' });
+            deps.push({
+              specifier: '<dynamic>',
+              dynamic: true,
+              kind: 'import-dynamic',
+            });
           }
         }
       },
 
       ExportNamedDeclaration(p) {
         if (p.node.source) {
-          deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'export-from' });
+          deps.push({
+            specifier: p.node.source.value,
+            dynamic: false,
+            kind: 'export-from',
+          });
         }
       },
       ExportAllDeclaration(p) {
-        deps.push({ specifier: p.node.source.value, dynamic: false, kind: 'export-from' });
+        deps.push({
+          specifier: p.node.source.value,
+          dynamic: false,
+          kind: 'export-from',
+        });
       },
     });
   } catch {
@@ -312,18 +373,56 @@ function extractDependencies(filePath: string, format: ModuleFormat): ExtractedD
 // ─────────────────────────────────────────────────────────────────────
 
 const builtinSet = new Set([
-  'assert', 'async_hooks', 'buffer', 'child_process', 'cluster',
-  'console', 'constants', 'crypto', 'dgram', 'diagnostics_channel',
-  'dns', 'domain', 'events', 'fs', 'http', 'http2', 'https',
-  'inspector', 'module', 'net', 'os', 'path', 'perf_hooks',
-  'process', 'punycode', 'querystring', 'readline', 'repl',
-  'stream', 'string_decoder', 'sys', 'test', 'timers', 'tls',
-  'trace_events', 'tty', 'url', 'util', 'v8', 'vm', 'wasi',
-  'worker_threads', 'zlib', 'sqlite',
+  'assert',
+  'async_hooks',
+  'buffer',
+  'child_process',
+  'cluster',
+  'console',
+  'constants',
+  'crypto',
+  'dgram',
+  'diagnostics_channel',
+  'dns',
+  'domain',
+  'events',
+  'fs',
+  'http',
+  'http2',
+  'https',
+  'inspector',
+  'module',
+  'net',
+  'os',
+  'path',
+  'perf_hooks',
+  'process',
+  'punycode',
+  'querystring',
+  'readline',
+  'repl',
+  'stream',
+  'string_decoder',
+  'sys',
+  'test',
+  'timers',
+  'tls',
+  'trace_events',
+  'tty',
+  'url',
+  'util',
+  'v8',
+  'vm',
+  'wasi',
+  'worker_threads',
+  'zlib',
+  'sqlite',
 ]);
 
 function isBuiltin(specifier: string): boolean {
-  return specifier.startsWith('node:') || builtinSet.has(specifier.split('/')[0]);
+  return (
+    specifier.startsWith('node:') || builtinSet.has(specifier.split('/')[0])
+  );
 }
 
 const RESOLVE_EXTENSIONS = ['.js', '.mjs', '.cjs', '.json', '.node'];
@@ -382,7 +481,9 @@ function resolvePackage(
     const pkgDir = path.join(dir, 'node_modules', pkgName);
     if (fs.existsSync(pkgDir)) {
       const pkgJsonPath = path.join(pkgDir, 'package.json');
-      const pj = fs.existsSync(pkgJsonPath) ? readPackageJson(pkgJsonPath) : null;
+      const pj = fs.existsSync(pkgJsonPath)
+        ? readPackageJson(pkgJsonPath)
+        : null;
 
       const hasExports = pj?.exports != null;
 
@@ -391,19 +492,25 @@ function resolvePackage(
       // "main" is ignored for bare specifiers.
       if (hasExports) {
         const normalizedSubpath = '.' + specifier.slice(pkgName.length);
-        const exportsResult = resolveExports(pj!.exports, normalizedSubpath, conditions);
+        const exportsResult = resolveExports(
+          pj!.exports,
+          normalizedSubpath,
+          conditions,
+        );
         if (exportsResult && typeof exportsResult === 'string') {
           const resolved = resolveRelative(exportsResult, pkgDir);
           if (resolved) return resolved;
         }
         // exports present but couldn't resolve — do NOT fall back to main/index
-        warnings.push(diag(
-          'warning',
-          'exports-not-resolved',
-          `Could not resolve '${specifier}' via exports map in '${pkgName}'.`,
-          fromFile,
-          `Check that the exports map exposes this subpath.`,
-        ));
+        warnings.push(
+          diag(
+            'warning',
+            'exports-not-resolved',
+            `Could not resolve '${specifier}' via exports map in '${pkgName}'.`,
+            fromFile,
+            `Check that the exports map exposes this subpath.`,
+          ),
+        );
         return null;
       }
 
@@ -420,26 +527,30 @@ function resolvePackage(
         if (resolved) return resolved;
       }
 
-      warnings.push(diag(
-        'warning',
-        'unresolved-import',
-        `Could not resolve '${specifier}' within ${pkgDir}`,
-        fromFile,
-        'Check that the package exports this path.',
-      ));
+      warnings.push(
+        diag(
+          'warning',
+          'unresolved-import',
+          `Could not resolve '${specifier}' within ${pkgDir}`,
+          fromFile,
+          'Check that the package exports this path.',
+        ),
+      );
       return null;
     }
 
     dir = path.dirname(dir);
   }
 
-  warnings.push(diag(
-    'warning',
-    'unresolved-import',
-    `Package '${pkgName}' not found in node_modules`,
-    fromFile,
-    `Run 'npm install' or 'pnpm install' to install dependencies.`,
-  ));
+  warnings.push(
+    diag(
+      'warning',
+      'unresolved-import',
+      `Package '${pkgName}' not found in node_modules`,
+      fromFile,
+      `Run 'npm install' or 'pnpm install' to install dependencies.`,
+    ),
+  );
   return null;
 }
 
@@ -464,13 +575,15 @@ function resolveSpecifier(
         return resolveRelative(resolved, pkgDir);
       }
     }
-    warnings.push(diag(
-      'warning',
-      'imports-not-resolved',
-      `Could not resolve '${specifier}' via imports map.`,
-      fromFile,
-      `Check that the nearest package.json has an "imports" entry for '${specifier}'.`,
-    ));
+    warnings.push(
+      diag(
+        'warning',
+        'imports-not-resolved',
+        `Could not resolve '${specifier}' via imports map.`,
+        fromFile,
+        `Check that the nearest package.json has an "imports" entry for '${specifier}'.`,
+      ),
+    );
     return null;
   }
 
@@ -485,7 +598,10 @@ function resolveSpecifier(
 // Package boundary detection
 // ─────────────────────────────────────────────────────────────────────
 
-function findPackageBoundary(filePath: string, projectRoot: string): string | null {
+function findPackageBoundary(
+  filePath: string,
+  projectRoot: string,
+): string | null {
   const pj = findNearestPackageJson(path.dirname(filePath));
   if (!pj) return null;
   if (!pj.path.startsWith(projectRoot)) return null;
@@ -496,7 +612,9 @@ function findPackageBoundary(filePath: string, projectRoot: string): string | nu
 // Main analyzer
 // ─────────────────────────────────────────────────────────────────────
 
-export async function analyze(options: AnalyzerOptions): Promise<PackagingManifest> {
+export async function analyze(
+  options: AnalyzerOptions,
+): Promise<PackagingManifest> {
   const projectRoot = fs.realpathSync(options.projectRoot);
   const warnings: ManifestWarning[] = [];
 
@@ -505,31 +623,36 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   // ── 1. Resolve project package.json ──
   const rootPjPath = path.join(projectRoot, 'package.json');
   const rootPj = fs.existsSync(rootPjPath) ? readPackageJson(rootPjPath) : null;
-  const appId = rootPj?.name?.replace(/^@[^/]+\//, '') || path.basename(projectRoot);
+  const appId =
+    rootPj?.name?.replace(/^@[^/]+\//, '') || path.basename(projectRoot);
 
   // ── Legacy pkg config diagnostic ──
   if (rootPj?.pkg) {
-    warnings.push(diag(
-      'info',
-      'legacy-pkg-config',
-      `package.json contains a "pkg" configuration section. ` +
-      `Hakobu does not yet read legacy pkg config fields (scripts, assets).`,
-      rootPjPath,
-      `Migrate to Hakobu config format or use --assets / --entry CLI flags. ` +
-      `Legacy "pkg.scripts" and "pkg.assets" globs will be supported in a future release.`,
-    ));
+    warnings.push(
+      diag(
+        'info',
+        'legacy-pkg-config',
+        `package.json contains a "pkg" configuration section. ` +
+          `Hakobu does not yet read legacy pkg config fields (scripts, assets).`,
+        rootPjPath,
+        `Migrate to Hakobu config format or use --assets / --entry CLI flags. ` +
+          `Legacy "pkg.scripts" and "pkg.assets" globs will be supported in a future release.`,
+      ),
+    );
   }
 
   // ── Root-level imports map diagnostic ──
   if (rootPj?.imports) {
-    warnings.push(diag(
-      'warning',
-      'imports-not-resolved',
-      `Project package.json uses "imports" (subpath imports). ` +
-      `#-prefixed specifiers in your code may not resolve correctly in the packaged app.`,
-      rootPjPath,
-      `Subpath imports resolution will be implemented before native ESM support is complete.`,
-    ));
+    warnings.push(
+      diag(
+        'warning',
+        'imports-not-resolved',
+        `Project package.json uses "imports" (subpath imports). ` +
+          `#-prefixed specifiers in your code may not resolve correctly in the packaged app.`,
+        rootPjPath,
+        `Subpath imports resolution will be implemented before native ESM support is complete.`,
+      ),
+    );
   }
 
   // ── 2. Resolve entrypoint ──
@@ -547,14 +670,16 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
       entryPath = entryFromExports;
     } else if (rootPj?.main) {
       entryPath = path.resolve(projectRoot, rootPj.main);
-      warnings.push(diag(
-        'warning',
-        'exports-not-resolved',
-        `Project has an "exports" field but Hakobu could not extract the entry from it. ` +
-        `Falling back to "main": "${rootPj.main}".`,
-        rootPjPath,
-        `For complex exports maps, specify the entry explicitly with --entry.`,
-      ));
+      warnings.push(
+        diag(
+          'warning',
+          'exports-not-resolved',
+          `Project has an "exports" field but Hakobu could not extract the entry from it. ` +
+            `Falling back to "main": "${rootPj.main}".`,
+          rootPjPath,
+          `For complex exports maps, specify the entry explicitly with --entry.`,
+        ),
+      );
     } else {
       entryPath = path.resolve(projectRoot, 'index.js');
     }
@@ -567,7 +692,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   if (!fs.existsSync(entryPath)) {
     throw new Error(
       `Entrypoint not found: ${entryPath}\n` +
-      `Specify an entry via --entry or set "main" in package.json.`
+        `Specify an entry via --entry or set "main" in package.json.`,
     );
   }
 
@@ -575,7 +700,7 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
 
   const { format: entryFormat, source: entryFormatSource } = detectModuleFormat(
     entryPath,
-    options.format
+    options.format,
   );
 
   const entry: ManifestEntrypoint = {
@@ -591,27 +716,34 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   const nativeAddons: NativeAddon[] = [];
   const visited = new Set<string>();
 
-  function addFile(absolutePath: string, kindOverride?: FileKind): ManifestFile | null {
+  function addFile(
+    absolutePath: string,
+    kindOverride?: FileKind,
+  ): ManifestFile | null {
     const realPath = fs.realpathSync(absolutePath);
 
     if (visited.has(realPath)) return null;
     visited.add(realPath);
 
     if (!realPath.startsWith(projectRoot)) {
-      warnings.push(diag(
-        'warning',
-        'unsupported-feature',
-        `File outside project root: ${realPath}`,
-        realPath,
-        'Ensure all dependencies are installed within the project.',
-      ));
+      warnings.push(
+        diag(
+          'warning',
+          'unsupported-feature',
+          `File outside project root: ${realPath}`,
+          realPath,
+          'Ensure all dependencies are installed within the project.',
+        ),
+      );
       return null;
     }
 
     const snapshotPath = toSnapshotPath(realPath, projectRoot, appId);
     const kind = kindOverride || classifyFile(realPath);
     const pjBoundary = findPackageBoundary(realPath, projectRoot);
-    const boundarySnapshot = pjBoundary ? toSnapshotPath(pjBoundary, projectRoot, appId) : null;
+    const boundarySnapshot = pjBoundary
+      ? toSnapshotPath(pjBoundary, projectRoot, appId)
+      : null;
 
     let format: ModuleFormat | null = null;
     if (kind === 'script') {
@@ -635,7 +767,12 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
           snapshotPath,
           name: pjData.name ?? null,
           version: pjData.version ?? null,
-          type: (pjData.type === 'module' ? 'module' : pjData.type === 'commonjs' ? 'commonjs' : null),
+          type:
+            pjData.type === 'module'
+              ? 'module'
+              : pjData.type === 'commonjs'
+                ? 'commonjs'
+                : null,
           main: pjData.main ?? null,
           exports: pjData.exports ?? null,
           imports: pjData.imports ?? null,
@@ -671,7 +808,10 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
       if (nmIndex >= 0 && nmIndex + 1 < addonParts.length) {
         // Determine package root: node_modules/@scope/pkg or node_modules/pkg
         let pkgRootIdx = nmIndex + 1;
-        if (addonParts[pkgRootIdx]?.startsWith('@') && pkgRootIdx + 1 < addonParts.length) {
+        if (
+          addonParts[pkgRootIdx]?.startsWith('@') &&
+          pkgRootIdx + 1 < addonParts.length
+        ) {
           pkgRootIdx += 1; // scoped package
         }
         const pkgRoot = addonParts.slice(0, pkgRootIdx + 1).join(path.sep);
@@ -703,29 +843,39 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
     for (const dep of deps) {
       // ── Dynamic specifier diagnostics ──
       if (dep.dynamic) {
-        const category: WarningCategory = dep.kind === 'require' ? 'dynamic-require' : 'dynamic-import';
+        const category: WarningCategory =
+          dep.kind === 'require' ? 'dynamic-require' : 'dynamic-import';
         let suggestion: string;
         if (dep.dirHint && dep.kind === 'require') {
-          suggestion = `Detected directory pattern: "${dep.dirHint}". ` +
+          suggestion =
+            `Detected directory pattern: "${dep.dirHint}". ` +
             `Add to hakobu config: { "assets": ["${dep.dirHint}/**/*.js"] }`;
         } else if (dep.kind === 'require') {
-          suggestion = `If the required module is known, add it to the assets list explicitly. ` +
+          suggestion =
+            `If the required module is known, add it to the assets list explicitly. ` +
             `Example: { "hakobu": { "assets": ["path/to/module.js"] } }`;
         } else {
           suggestion = `If the imported module is known, add it as a static import or to the assets list.`;
         }
-        warnings.push(diag(
-          'warning',
-          category,
-          `${dep.kind}() with non-literal argument in ${path.basename(absolutePath)}. ` +
-          `Hakobu cannot trace dynamic ${dep.kind === 'require' ? 'require' : 'import'} targets statically.`,
-          absolutePath,
-          suggestion,
-        ));
+        warnings.push(
+          diag(
+            'warning',
+            category,
+            `${dep.kind}() with non-literal argument in ${path.basename(absolutePath)}. ` +
+              `Hakobu cannot trace dynamic ${dep.kind === 'require' ? 'require' : 'import'} targets statically.`,
+            absolutePath,
+            suggestion,
+          ),
+        );
         continue;
       }
 
-      const resolved = resolveSpecifier(dep.specifier, absolutePath, warnings, dep.kind);
+      const resolved = resolveSpecifier(
+        dep.specifier,
+        absolutePath,
+        warnings,
+        dep.kind,
+      );
       if (resolved) {
         walkFile(resolved);
       }
@@ -764,14 +914,20 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
             if (lastSep >= 0) {
               const dirPrefix = prefix.slice(0, lastSep);
               const resolvedDir = path.resolve(projectRoot, dirPrefix);
-              if (fs.existsSync(resolvedDir) && fs.statSync(resolvedDir).isDirectory()) {
+              if (
+                fs.existsSync(resolvedDir) &&
+                fs.statSync(resolvedDir).isDirectory()
+              ) {
                 globCwd = resolvedDir;
                 globPattern = pattern.slice(lastSep + 1);
               }
             }
           }
 
-          const matches = globSync(globPattern, { cwd: globCwd, absolute: true });
+          const matches = globSync(globPattern, {
+            cwd: globCwd,
+            absolute: true,
+          });
           for (const match of matches) {
             try {
               if (fs.statSync(match).isFile()) {
@@ -785,11 +941,13 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
   }
 
   // ── 5. Build externals ──
-  const externals: ExternalArtifact[] = (options.externals ?? []).map((pattern) => ({
-    name: pattern,
-    pattern,
-    required: false,
-  }));
+  const externals: ExternalArtifact[] = (options.externals ?? []).map(
+    (pattern) => ({
+      name: pattern,
+      pattern,
+      required: false,
+    }),
+  );
 
   // ── 6. Assemble manifest ──
   return {
@@ -820,13 +978,20 @@ export async function analyze(options: AnalyzerOptions): Promise<PackagingManife
  *   exports: { ".": { "default": "./file.js" } }
  *   exports: { ".": { "import": "./file.js" } }
  */
-function resolveExportsEntry(exports: unknown, projectRoot: string): string | null {
+function resolveExportsEntry(
+  exports: unknown,
+  projectRoot: string,
+): string | null {
   if (typeof exports === 'string') {
     const resolved = path.resolve(projectRoot, exports);
     return fs.existsSync(resolved) ? resolved : null;
   }
 
-  if (typeof exports === 'object' && exports !== null && !Array.isArray(exports)) {
+  if (
+    typeof exports === 'object' &&
+    exports !== null &&
+    !Array.isArray(exports)
+  ) {
     const map = exports as Record<string, unknown>;
 
     // { ".": ... }

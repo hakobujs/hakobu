@@ -269,7 +269,7 @@ export interface SnapshotIndex {
  */
 export function buildSnapshotIndex(
   manifest: PackagingManifest,
-  fileSizes: Map<string, { size: number; hash: string }>
+  fileSizes: Map<string, { size: number; hash: string }>,
 ): SnapshotIndex {
   // ── Sort entries deterministically ──
   const sortedPaths = Object.keys(manifest.files).sort();
@@ -330,8 +330,13 @@ export function buildSnapshotIndex(
 // Directory tree builder
 // ─────────────────────────────────────────────────────────────────────
 
-function buildDirectoryTree(entries: SnapshotEntry[]): Record<string, SnapshotDirectory> {
-  const dirs = new Map<string, { files: Set<string>; directories: Set<string> }>();
+function buildDirectoryTree(
+  entries: SnapshotEntry[],
+): Record<string, SnapshotDirectory> {
+  const dirs = new Map<
+    string,
+    { files: Set<string>; directories: Set<string> }
+  >();
 
   function ensureDir(dirPath: string) {
     if (!dirs.has(dirPath)) {

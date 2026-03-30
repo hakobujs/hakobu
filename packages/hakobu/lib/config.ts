@@ -229,18 +229,22 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
           warnings.push({
             type: 'deprecated',
             option: 'pkg',
-            message: 'Both "hakobu" and "pkg" fields found in package.json. Using "hakobu"; ignoring "pkg".',
+            message:
+              'Both "hakobu" and "pkg" fields found in package.json. Using "hakobu"; ignoring "pkg".',
           });
         } else {
           legacyConfig = pkg.pkg;
           warnings.push({
             type: 'migrated',
             option: 'pkg',
-            message: 'Reading config from "pkg" field. Migrate to "hakobu" field for future compatibility.',
+            message:
+              'Reading config from "pkg" field. Migrate to "hakobu" field for future compatibility.',
           });
         }
       }
-    } catch { /* invalid package.json — analyzer will handle this */ }
+    } catch {
+      /* invalid package.json — analyzer will handle this */
+    }
   }
 
   // ── Handle legacy --config / -c flag ──
@@ -248,7 +252,8 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
     warnings.push({
       type: 'deprecated',
       option: '--config',
-      message: '--config is deprecated. Put config in the "hakobu" field of package.json instead.',
+      message:
+        '--config is deprecated. Put config in the "hakobu" field of package.json instead.',
     });
   }
 
@@ -269,7 +274,8 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
     warnings.push({
       type: 'migrated',
       option: '--out-path',
-      message: '--out-path is accepted. Use --output with a full path in new projects.',
+      message:
+        '--out-path is accepted. Use --output with a full path in new projects.',
     });
     legacyOutputPath = String(outPathValue);
   }
@@ -282,7 +288,8 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       warnings.push({
         type: 'deprecated',
         option: '--targets',
-        message: 'Multi-target builds are not supported. Hakobu builds one target at a time. Using the first target.',
+        message:
+          'Multi-target builds are not supported. Hakobu builds one target at a time. Using the first target.',
       });
     }
     if (targetList.length > 0) {
@@ -290,13 +297,16 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
       warnings.push({
         type: 'migrated',
         option: '--targets',
-        message: '--targets is accepted. Use --target (singular) in new projects.',
+        message:
+          '--targets is accepted. Use --target (singular) in new projects.',
       });
     }
   }
 
   // ── Normalize legacy pkg config ──
-  const fromLegacy = legacyConfig ? normalizeLegacy(legacyConfig, warnings) : {};
+  const fromLegacy = legacyConfig
+    ? normalizeLegacy(legacyConfig, warnings)
+    : {};
 
   // ── Normalize modern hakobu config ──
   const fromModern = hakobuConfig || {};
@@ -323,7 +333,9 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
 
   let bundleExternal: string[] | undefined;
   if (args.external) {
-    bundleExternal = Array.isArray(args.external) ? args.external : [String(args.external)];
+    bundleExternal = Array.isArray(args.external)
+      ? args.external
+      : [String(args.external)];
   } else {
     bundleExternal = source.bundleExternal;
   }
@@ -356,10 +368,10 @@ export function normalizeConfig(args: CliArgs): NormalizedConfig {
     v8Options = String(args.options)
       .split(',')
       .filter(Boolean)
-      .map(flag => flag.startsWith('--') ? flag : `--${flag}`);
+      .map((flag) => (flag.startsWith('--') ? flag : `--${flag}`));
   } else if (hakobuConfig?.options) {
-    v8Options = hakobuConfig.options.map(
-      (flag: string) => flag.startsWith('--') ? flag : `--${flag}`
+    v8Options = hakobuConfig.options.map((flag: string) =>
+      flag.startsWith('--') ? flag : `--${flag}`,
     );
   }
 
@@ -406,7 +418,8 @@ function normalizeLegacy(
     warnings.push({
       type: 'migrated',
       option: 'pkg.scripts',
-      message: '"pkg.scripts" mapped to "hakobu.assets". In Hakobu, use "assets" for extra files to include.',
+      message:
+        '"pkg.scripts" mapped to "hakobu.assets". In Hakobu, use "assets" for extra files to include.',
     });
     result.assets = [...(legacy.assets || []), ...legacy.scripts];
   } else if (legacy.assets && legacy.assets.length > 0) {
@@ -419,7 +432,8 @@ function normalizeLegacy(
       warnings.push({
         type: 'deprecated',
         option: 'pkg.targets',
-        message: 'Multi-target "pkg.targets" not supported. Hakobu builds one target at a time. Using the first.',
+        message:
+          'Multi-target "pkg.targets" not supported. Hakobu builds one target at a time. Using the first.',
       });
     }
     result.target = legacy.targets[0];
@@ -435,7 +449,8 @@ function normalizeLegacy(
     warnings.push({
       type: 'unsupported',
       option: 'pkg.patches',
-      message: '"pkg.patches" is not supported. Hakobu does not support source patching during packaging.',
+      message:
+        '"pkg.patches" is not supported. Hakobu does not support source patching during packaging.',
     });
   }
 
@@ -443,7 +458,8 @@ function normalizeLegacy(
     warnings.push({
       type: 'unsupported',
       option: 'pkg.dictionary',
-      message: '"pkg.dictionary" is not supported. Hakobu resolves dependencies from the project directly.',
+      message:
+        '"pkg.dictionary" is not supported. Hakobu resolves dependencies from the project directly.',
     });
   }
 
@@ -451,7 +467,8 @@ function normalizeLegacy(
     warnings.push({
       type: 'unsupported',
       option: 'pkg.deployFiles',
-      message: '"pkg.deployFiles" is not supported. Use "hakobu.assets" for extra files, or "hakobu.externals" for external binaries.',
+      message:
+        '"pkg.deployFiles" is not supported. Use "hakobu.assets" for extra files, or "hakobu.externals" for external binaries.',
     });
   }
 
@@ -459,7 +476,8 @@ function normalizeLegacy(
     warnings.push({
       type: 'unsupported',
       option: 'pkg.ignore',
-      message: '"pkg.ignore" is not supported. Hakobu includes only files reachable from the entry point.',
+      message:
+        '"pkg.ignore" is not supported. Hakobu includes only files reachable from the entry point.',
     });
   }
 
@@ -488,14 +506,18 @@ function checkUnsupportedCliFlag(
 ): void {
   if (args[flag] !== undefined && args[flag] !== false) {
     const messages: Record<string, string> = {
-      'no-bytecode': '--no-bytecode is not needed. Hakobu defaults to source-only mode. Use --bytecode to opt in to bytecode compilation.',
+      'no-bytecode':
+        '--no-bytecode is not needed. Hakobu defaults to source-only mode. Use --bytecode to opt in to bytecode compilation.',
       // compress is now supported — handled in normalization above
-      'public': '--public is not supported. Hakobu always includes source.',
-      'public-packages': '--public-packages is not supported. Hakobu always includes source.',
-      'sea': '--sea is not supported. Hakobu uses its own snapshot format, not Node SEA.',
+      public: '--public is not supported. Hakobu always includes source.',
+      'public-packages':
+        '--public-packages is not supported. Hakobu always includes source.',
+      sea: '--sea is not supported. Hakobu uses its own snapshot format, not Node SEA.',
       // options is now supported — handled in normalization above
-      'no-native-build': '--no-native-build is not needed. Hakobu does not prebuild native addons by default.',
-      'no-dict': '--no-dict is not supported. Hakobu does not use dictionaries.',
+      'no-native-build':
+        '--no-native-build is not needed. Hakobu does not prebuild native addons by default.',
+      'no-dict':
+        '--no-dict is not supported. Hakobu does not use dictionaries.',
       // build is now supported — handled in normalization
     };
     warnings.push({

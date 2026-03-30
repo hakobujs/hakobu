@@ -47,12 +47,23 @@ export async function bootstrap(
   const unpatch = patchFS(sfs);
 
   const entrySnapshotPath = options?.entry ?? sfs.getEntrypoint();
-  const format = sfs.getModuleFormat(entrySnapshotPath) ?? sfs.getEntrypointFormat();
+  const format =
+    sfs.getModuleFormat(entrySnapshotPath) ?? sfs.getEntrypointFormat();
 
   if (format === 'esm') {
-    return bootstrapESM(sfs, entrySnapshotPath, unpatch, options?.dryRun ?? false);
+    return bootstrapESM(
+      sfs,
+      entrySnapshotPath,
+      unpatch,
+      options?.dryRun ?? false,
+    );
   } else {
-    return bootstrapCJS(sfs, entrySnapshotPath, unpatch, options?.dryRun ?? false);
+    return bootstrapCJS(
+      sfs,
+      entrySnapshotPath,
+      unpatch,
+      options?.dryRun ?? false,
+    );
   }
 }
 
@@ -144,7 +155,10 @@ function buildHookTransferData(sfs: SnapshotFS): HookTransferData {
   const index = (sfs as any).index as SnapshotIndex;
 
   // Build entries map: path → { offset, size, format }
-  const entries: Record<string, { offset: number; size: number; format: string | null }> = {};
+  const entries: Record<
+    string,
+    { offset: number; size: number; format: string | null }
+  > = {};
   for (const entry of index.entries) {
     entries[entry.path] = {
       offset: entry.offset,
@@ -154,7 +168,10 @@ function buildHookTransferData(sfs: SnapshotFS): HookTransferData {
   }
 
   // Build packages map: path → { type, main, directory }
-  const packages: Record<string, { type: string | null; main: string | null; directory: string }> = {};
+  const packages: Record<
+    string,
+    { type: string | null; main: string | null; directory: string }
+  > = {};
   for (const [path, pkg] of Object.entries(index.packages)) {
     packages[path] = {
       type: pkg.type,

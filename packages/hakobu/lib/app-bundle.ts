@@ -80,10 +80,7 @@ export interface MacosBundleMetadata {
 // ─────────────────────────────────────────────────────────────────────
 
 function esc(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function plistEntry(key: string, value: string): string {
@@ -217,7 +214,7 @@ export function createAppBundle(opts: AppBundleOptions): string {
     if (!iconPath.endsWith('.icns')) {
       throw new Error(
         `macOS icon must be a .icns file (got ${path.extname(iconPath) || 'no extension'}).\n` +
-        'Convert your icon to .icns using: iconutil -c icns <iconset>'
+          'Convert your icon to .icns using: iconutil -c icns <iconset>',
       );
     }
     iconFileName = path.basename(iconPath);

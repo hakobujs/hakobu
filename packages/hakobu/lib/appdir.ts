@@ -303,10 +303,7 @@ export function createAppDir(opts: AppDirOptions): string {
   // Write .desktop file
   const desktopContent = generateDesktopFile(execName, appName, opts.linux);
   const desktopFileName = `${appName}.desktop`;
-  fs.writeFileSync(
-    path.join(applicationsDir, desktopFileName),
-    desktopContent,
-  );
+  fs.writeFileSync(path.join(applicationsDir, desktopFileName), desktopContent);
 
   // Place icon if configured
   const iconPath = opts.linux?.iconPath;
@@ -316,7 +313,7 @@ export function createAppDir(opts: AppDirOptions): string {
     }
     if (!iconPath.endsWith('.png')) {
       throw new Error(
-        `Linux icon must be a .png file (got ${path.extname(iconPath) || 'no extension'}).`
+        `Linux icon must be a .png file (got ${path.extname(iconPath) || 'no extension'}).`,
       );
     }
 
@@ -371,10 +368,14 @@ export interface AppImageOptions {
  */
 function nodeArchToAppImage(arch: string): string {
   switch (arch) {
-    case 'x64': return 'x86_64';
-    case 'arm64': return 'aarch64';
-    case 'arm': return 'armhf';
-    default: return arch;
+    case 'x64':
+      return 'x86_64';
+    case 'arm64':
+      return 'aarch64';
+    case 'arm':
+      return 'armhf';
+    default:
+      return arch;
   }
 }
 
@@ -412,9 +413,9 @@ export function createAppImage(opts: AppImageOptions): string {
     if (err.code === 'ENOENT') {
       throw new Error(
         'appimagetool is not installed or not in PATH.\n' +
-        'Download from: https://github.com/AppImage/appimagetool/releases\n' +
-        'On Ubuntu/Debian: download the AppImage, chmod +x, and move to /usr/local/bin/\n' +
-        'Or install via package manager if available.'
+          'Download from: https://github.com/AppImage/appimagetool/releases\n' +
+          'On Ubuntu/Debian: download the AppImage, chmod +x, and move to /usr/local/bin/\n' +
+          'Or install via package manager if available.',
       );
     }
     throw err;
@@ -437,5 +438,7 @@ export function createAppImage(opts: AppImageOptions): string {
  * Check if a platform string represents a Linux target.
  */
 export function isLinuxPlatform(platform: string): boolean {
-  return platform === 'linux' || platform === 'alpine' || platform === 'linuxstatic';
+  return (
+    platform === 'linux' || platform === 'alpine' || platform === 'linuxstatic'
+  );
 }

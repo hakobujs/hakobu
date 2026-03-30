@@ -34,7 +34,12 @@ import type {
 import type { ModuleFormat, FileKind } from './manifest';
 
 // Re-export path utilities from the canonical module
-export { isSnapshotPath, toNative, toCanonical, toFileUrl } from './snapshot-path';
+export {
+  isSnapshotPath,
+  toNative,
+  toCanonical,
+  toFileUrl,
+} from './snapshot-path';
 import { isSnapshotPath, toCanonical, toNative } from './snapshot-path';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -42,7 +47,9 @@ import { isSnapshotPath, toCanonical, toNative } from './snapshot-path';
 // ─────────────────────────────────────────────────────────────────────
 
 function enoent(syscall: string, path: string): NodeJS.ErrnoException {
-  const err = new Error(`${syscall} ENOENT: no such file or directory, '${path}'`) as NodeJS.ErrnoException;
+  const err = new Error(
+    `${syscall} ENOENT: no such file or directory, '${path}'`,
+  ) as NodeJS.ErrnoException;
   err.code = 'ENOENT';
   err.errno = -2;
   err.syscall = syscall;
@@ -51,7 +58,9 @@ function enoent(syscall: string, path: string): NodeJS.ErrnoException {
 }
 
 function enotdir(syscall: string, path: string): NodeJS.ErrnoException {
-  const err = new Error(`${syscall} ENOTDIR: not a directory, '${path}'`) as NodeJS.ErrnoException;
+  const err = new Error(
+    `${syscall} ENOTDIR: not a directory, '${path}'`,
+  ) as NodeJS.ErrnoException;
   err.code = 'ENOTDIR';
   err.errno = -20;
   err.syscall = syscall;
@@ -60,7 +69,9 @@ function enotdir(syscall: string, path: string): NodeJS.ErrnoException {
 }
 
 function erofs(syscall: string, path: string): NodeJS.ErrnoException {
-  const err = new Error(`${syscall} EROFS: read-only file system, '${path}'`) as NodeJS.ErrnoException;
+  const err = new Error(
+    `${syscall} EROFS: read-only file system, '${path}'`,
+  ) as NodeJS.ErrnoException;
   err.code = 'EROFS';
   err.errno = -30;
   err.syscall = syscall;
@@ -69,7 +80,9 @@ function erofs(syscall: string, path: string): NodeJS.ErrnoException {
 }
 
 function eisdir(syscall: string, path: string): NodeJS.ErrnoException {
-  const err = new Error(`${syscall} EISDIR: illegal operation on a directory, '${path}'`) as NodeJS.ErrnoException;
+  const err = new Error(
+    `${syscall} EISDIR: illegal operation on a directory, '${path}'`,
+  ) as NodeJS.ErrnoException;
   err.code = 'EISDIR';
   err.errno = -21;
   err.syscall = syscall;
@@ -113,10 +126,14 @@ function fileStat(size: number): SnapshotStat {
     isSymbolicLink: () => false,
     size,
     mode: 0o100644,
-    mtime: EPOCH, mtimeMs: EPOCH_MS,
-    atime: EPOCH, atimeMs: EPOCH_MS,
-    ctime: EPOCH, ctimeMs: EPOCH_MS,
-    birthtime: EPOCH, birthtimeMs: EPOCH_MS,
+    mtime: EPOCH,
+    mtimeMs: EPOCH_MS,
+    atime: EPOCH,
+    atimeMs: EPOCH_MS,
+    ctime: EPOCH,
+    ctimeMs: EPOCH_MS,
+    birthtime: EPOCH,
+    birthtimeMs: EPOCH_MS,
   };
 }
 
@@ -127,10 +144,14 @@ function dirStat(): SnapshotStat {
     isSymbolicLink: () => false,
     size: 0,
     mode: 0o40755,
-    mtime: EPOCH, mtimeMs: EPOCH_MS,
-    atime: EPOCH, atimeMs: EPOCH_MS,
-    ctime: EPOCH, ctimeMs: EPOCH_MS,
-    birthtime: EPOCH, birthtimeMs: EPOCH_MS,
+    mtime: EPOCH,
+    mtimeMs: EPOCH_MS,
+    atime: EPOCH,
+    atimeMs: EPOCH_MS,
+    ctime: EPOCH,
+    ctimeMs: EPOCH_MS,
+    birthtime: EPOCH,
+    birthtimeMs: EPOCH_MS,
   };
 }
 

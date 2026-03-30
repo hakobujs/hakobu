@@ -46,7 +46,9 @@ export class HakobuRuntimeError extends Error {
       `Operation: ${opts.operation}`,
       `Remediation: ${opts.remediation}`,
       opts.cause ? `Cause: ${opts.cause.message}` : null,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     super(fullMessage);
     this.name = 'HakobuRuntimeError';
@@ -197,7 +199,8 @@ export function externalNotFound(
     artifactName: name,
     remediation:
       `Searched locations:\n` +
-      searchedPaths.map(p => `  - ${p}`).join('\n') + '\n\n' +
+      searchedPaths.map((p) => `  - ${p}`).join('\n') +
+      '\n\n' +
       `Set HAKOBU_EXTERNAL_${name.toUpperCase().replace(/[^A-Z0-9]/g, '_')} ` +
       `to the artifact path, or place it at one of the search locations.`,
   });

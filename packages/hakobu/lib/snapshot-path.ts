@@ -51,8 +51,7 @@ export function isSnapshotPath(p: string): boolean {
   // Strip drive letter for matching
   const noPrefix = /^[a-z]:/.test(lower) ? lower.slice(2) : lower;
 
-  return noPrefix === '/snapshot' ||
-         noPrefix.startsWith('/snapshot/');
+  return noPrefix === '/snapshot' || noPrefix.startsWith('/snapshot/');
 }
 
 // ─────────────────────────────────────────────────────────────────────

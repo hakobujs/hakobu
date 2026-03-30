@@ -84,9 +84,11 @@ function signMachOExecutable(executable: string, identity?: string) {
   const id = identity || process.env.HAKOBU_SIGN_IDENTITY || '-';
   const args = [
     '--force',
-    '--sign', id,
-    '--options', 'runtime',          // hardened runtime — required for notarization
-    '--timestamp',                    // secure timestamp — required for notarization
+    '--sign',
+    id,
+    '--options',
+    'runtime', // hardened runtime — required for notarization
+    '--timestamp', // secure timestamp — required for notarization
     executable,
   ];
 
@@ -173,7 +175,7 @@ async function notarizeMachOExecutable(opts: NotarizeOptions): Promise<void> {
     if (!teamId) missing.push('HAKOBU_APPLE_TEAM_ID');
     throw new Error(
       `Cannot notarize: missing ${missing.join(', ')}. ` +
-      `Set these env vars or pass them as options. See docs/macos-notarization.md.`
+        `Set these env vars or pass them as options. See docs/macos-notarization.md.`,
     );
   }
 
@@ -186,22 +188,36 @@ async function notarizeMachOExecutable(opts: NotarizeOptions): Promise<void> {
 
   try {
     // 2. Submit and wait for notarization result
-    log.info('Submitting to Apple notary service (this may take a few minutes)...');
-    const { stdout } = await execFileAsync('xcrun', [
-      'notarytool', 'submit', zipPath,
-      '--apple-id', appleId,
-      '--password', applePassword,
-      '--team-id', teamId,
-      '--wait',
-    ], { timeout: 600000 }); // 10 minute timeout
+    log.info(
+      'Submitting to Apple notary service (this may take a few minutes)...',
+    );
+    const { stdout } = await execFileAsync(
+      'xcrun',
+      [
+        'notarytool',
+        'submit',
+        zipPath,
+        '--apple-id',
+        appleId,
+        '--password',
+        applePassword,
+        '--team-id',
+        teamId,
+        '--wait',
+      ],
+      { timeout: 600000 },
+    ); // 10 minute timeout
 
     log.info(`Notarization result:\n${stdout}`);
 
-    if (stdout.includes('status: Invalid') || stdout.includes('status: Rejected')) {
+    if (
+      stdout.includes('status: Invalid') ||
+      stdout.includes('status: Rejected')
+    ) {
       throw new Error(
         'Apple notarization was rejected. Run:\n' +
-        '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
-        'to see the full rejection reason.'
+          '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
+          'to see the full rejection reason.',
       );
     }
 
@@ -240,22 +256,33 @@ function signAppBundle(bundlePath: string, identity?: string) {
   if (id === '-') {
     // Ad-hoc: sign the bundle without timestamp/hardened runtime
     try {
-      execFileSync('codesign', ['--deep', '--force', '--sign', '-', bundlePath], {
-        stdio: 'inherit',
-      });
+      execFileSync(
+        'codesign',
+        ['--deep', '--force', '--sign', '-', bundlePath],
+        {
+          stdio: 'inherit',
+        },
+      );
     } catch {
       // Non-fatal for ad-hoc — bundle may still work
     }
     return;
   }
 
-  execFileSync('codesign', [
-    '--deep', '--force',
-    '--sign', id,
-    '--options', 'runtime',
-    '--timestamp',
-    bundlePath,
-  ], { stdio: 'inherit' });
+  execFileSync(
+    'codesign',
+    [
+      '--deep',
+      '--force',
+      '--sign',
+      id,
+      '--options',
+      'runtime',
+      '--timestamp',
+      bundlePath,
+    ],
+    { stdio: 'inherit' },
+  );
 }
 
 /**
@@ -281,7 +308,7 @@ async function notarizeAppBundle(opts: NotarizeOptions): Promise<void> {
     if (!teamId) missing.push('HAKOBU_APPLE_TEAM_ID');
     throw new Error(
       `Cannot notarize: missing ${missing.join(', ')}. ` +
-      `Set these env vars or pass them as options. See docs/macos-notarization.md.`
+        `Set these env vars or pass them as options. See docs/macos-notarization.md.`,
     );
   }
 
@@ -293,21 +320,33 @@ async function notarizeAppBundle(opts: NotarizeOptions): Promise<void> {
 
   try {
     log.info('Submitting .app bundle to Apple notary service...');
-    const { stdout } = await execFileAsync('xcrun', [
-      'notarytool', 'submit', zipPath,
-      '--apple-id', appleId,
-      '--password', applePassword,
-      '--team-id', teamId,
-      '--wait',
-    ], { timeout: 600000 });
+    const { stdout } = await execFileAsync(
+      'xcrun',
+      [
+        'notarytool',
+        'submit',
+        zipPath,
+        '--apple-id',
+        appleId,
+        '--password',
+        applePassword,
+        '--team-id',
+        teamId,
+        '--wait',
+      ],
+      { timeout: 600000 },
+    );
 
     log.info(`Notarization result:\n${stdout}`);
 
-    if (stdout.includes('status: Invalid') || stdout.includes('status: Rejected')) {
+    if (
+      stdout.includes('status: Invalid') ||
+      stdout.includes('status: Rejected')
+    ) {
       throw new Error(
         'Apple notarization was rejected. Run:\n' +
-        '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
-        'to see the full rejection reason.'
+          '  xcrun notarytool log <submission-id> --apple-id ... --password ... --team-id ...\n' +
+          'to see the full rejection reason.',
       );
     }
 

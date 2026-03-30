@@ -56,7 +56,9 @@ function isSnapshotArg(arg: unknown): boolean {
 
 function throwEROFS(syscall: string, arg: unknown): never {
   const p = coercePath(arg) ?? String(arg);
-  const err = new Error(`${syscall} EROFS: read-only file system, '${p}'`) as NodeJS.ErrnoException;
+  const err = new Error(
+    `${syscall} EROFS: read-only file system, '${p}'`,
+  ) as NodeJS.ErrnoException;
   err.code = 'EROFS';
   err.errno = -30;
   err.syscall = syscall;
@@ -142,9 +144,8 @@ export function patchFS(sfs: SnapshotFS): () => void {
       const buffer = sfs.readFileSync(p);
 
       // Handle encoding option
-      const encoding = typeof options_ === 'string'
-        ? options_
-        : options_?.encoding ?? null;
+      const encoding =
+        typeof options_ === 'string' ? options_ : (options_?.encoding ?? null);
 
       if (encoding) {
         return buffer.toString(encoding as BufferEncoding);
@@ -194,7 +195,10 @@ export function patchFS(sfs: SnapshotFS): () => void {
   };
 
   // Preserve realpathSync.native
-  (fs as any).realpathSync.native = function realpathSyncNative(path_: any, options?: any) {
+  (fs as any).realpathSync.native = function realpathSyncNative(
+    path_: any,
+    options?: any,
+  ) {
     if (isSnapshotArg(path_)) {
       return sfs.realpathSync(coercePath(path_)!);
     }
@@ -208,7 +212,9 @@ export function patchFS(sfs: SnapshotFS): () => void {
       const p = coercePath(path_)!;
       // Read access always succeeds if the path exists
       if (!sfs.existsSync(p)) {
-        const err = new Error(`ENOENT: no such file or directory, access '${p}'`) as NodeJS.ErrnoException;
+        const err = new Error(
+          `ENOENT: no such file or directory, access '${p}'`,
+        ) as NodeJS.ErrnoException;
         err.code = 'ENOENT';
         err.errno = -2;
         err.syscall = 'access';
@@ -217,8 +223,10 @@ export function patchFS(sfs: SnapshotFS): () => void {
       }
       // Write access on snapshot paths fails
       const W_OK = 2;
-      if (mode_ !== undefined && (mode_ & W_OK)) {
-        const err = new Error(`EROFS: read-only file system, access '${p}'`) as NodeJS.ErrnoException;
+      if (mode_ !== undefined && mode_ & W_OK) {
+        const err = new Error(
+          `EROFS: read-only file system, access '${p}'`,
+        ) as NodeJS.ErrnoException;
         err.code = 'EROFS';
         err.errno = -30;
         err.syscall = 'access';
@@ -232,7 +240,10 @@ export function patchFS(sfs: SnapshotFS): () => void {
 
   // ── Write operations → EROFS ──
 
-  (fs as any).writeFileSync = function writeFileSync(path_: any, ...rest: any[]) {
+  (fs as any).writeFileSync = function writeFileSync(
+    path_: any,
+    ...rest: any[]
+  ) {
     if (isSnapshotArg(path_)) throwEROFS('write', path_);
     return (orig.writeFileSync as any).call(fs, path_, ...rest);
   };
@@ -264,7 +275,11 @@ export function patchFS(sfs: SnapshotFS): () => void {
     return orig.chmodSync.call(fs, path_, mode);
   };
 
-  (fs as any).copyFileSync = function copyFileSync(src: any, dest: any, ...rest: any[]) {
+  (fs as any).copyFileSync = function copyFileSync(
+    src: any,
+    dest: any,
+    ...rest: any[]
+  ) {
     if (isSnapshotArg(dest)) throwEROFS('copyfile', dest);
     // Reading from snapshot is OK — write the data through host FS
     if (isSnapshotArg(src)) {
@@ -296,14 +311,28 @@ export function patchFS(sfs: SnapshotFS): () => void {
     }
 
     // Relative require from within snapshot (./foo, ../bar)
-    if (!resolved && (request.startsWith('.') || request.startsWith('/')) && parent?.filename && isSnapshotArg(parent.filename)) {
-      const parentDir = parent.filename.substring(0, parent.filename.lastIndexOf('/'));
+    if (
+      !resolved &&
+      (request.startsWith('.') || request.startsWith('/')) &&
+      parent?.filename &&
+      isSnapshotArg(parent.filename)
+    ) {
+      const parentDir = parent.filename.substring(
+        0,
+        parent.filename.lastIndexOf('/'),
+      );
       const candidate = toCanonical(parentDir + '/' + request);
       resolved = tryResolveInSnapshot(candidate, sfs);
     }
 
     // Bare specifier from within snapshot (package name)
-    if (!resolved && parent?.filename && isSnapshotArg(parent.filename) && !request.startsWith('.') && !request.startsWith('/')) {
+    if (
+      !resolved &&
+      parent?.filename &&
+      isSnapshotArg(parent.filename) &&
+      !request.startsWith('.') &&
+      !request.startsWith('/')
+    ) {
       resolved = tryResolveBareInSnapshot(request, parent.filename, sfs);
     }
 
@@ -345,17 +374,25 @@ export function patchFS(sfs: SnapshotFS): () => void {
 
   // ── CJS resolution helpers ──
 
-  function tryResolveInSnapshot(candidate: string, sfsInst: SnapshotFS): string | null {
+  function tryResolveInSnapshot(
+    candidate: string,
+    sfsInst: SnapshotFS,
+  ): string | null {
     const EXTS = ['.js', '.cjs', '.mjs', '.json', '.node'];
     // Exact file
-    if (sfsInst.existsSync(candidate) && sfsInst.statSync(candidate).isFile()) return candidate;
+    if (sfsInst.existsSync(candidate) && sfsInst.statSync(candidate).isFile())
+      return candidate;
     // With extensions
     for (const ext of EXTS) {
       const withExt = candidate + ext;
-      if (sfsInst.existsSync(withExt) && sfsInst.statSync(withExt).isFile()) return withExt;
+      if (sfsInst.existsSync(withExt) && sfsInst.statSync(withExt).isFile())
+        return withExt;
     }
     // Directory with index
-    if (sfsInst.existsSync(candidate) && sfsInst.statSync(candidate).isDirectory()) {
+    if (
+      sfsInst.existsSync(candidate) &&
+      sfsInst.statSync(candidate).isDirectory()
+    ) {
       const pjPath = candidate + '/package.json';
       if (sfsInst.existsSync(pjPath)) {
         const pkg = sfsInst.getPackage(pjPath);
@@ -373,7 +410,11 @@ export function patchFS(sfs: SnapshotFS): () => void {
     return null;
   }
 
-  function tryResolveBareInSnapshot(specifier: string, parentFilename: string, sfsInst: SnapshotFS): string | null {
+  function tryResolveBareInSnapshot(
+    specifier: string,
+    parentFilename: string,
+    sfsInst: SnapshotFS,
+  ): string | null {
     const pkgName = specifier.startsWith('@')
       ? specifier.split('/').slice(0, 2).join('/')
       : specifier.split('/')[0];
@@ -381,22 +422,33 @@ export function patchFS(sfs: SnapshotFS): () => void {
     const appId = sfsInst.getAppId();
     const snapRoot = '/snapshot/' + appId;
 
-    let searchDir = parentFilename.substring(0, parentFilename.lastIndexOf('/'));
+    let searchDir = parentFilename.substring(
+      0,
+      parentFilename.lastIndexOf('/'),
+    );
     while (searchDir.startsWith(snapRoot)) {
       const nmDir = searchDir + '/node_modules/' + pkgName;
       if (sfsInst.existsSync(nmDir)) {
         if (!subpath) {
           // Root import — check exports, then main, then index
           const pkgJsonPath = nmDir + '/package.json';
-          const pkg = sfsInst.existsSync(pkgJsonPath) ? sfsInst.getPackage(pkgJsonPath) : null;
+          const pkg = sfsInst.existsSync(pkgJsonPath)
+            ? sfsInst.getPackage(pkgJsonPath)
+            : null;
           if (pkg?.main) {
-            const resolved = tryResolveInSnapshot(toCanonical(nmDir + '/' + pkg.main), sfsInst);
+            const resolved = tryResolveInSnapshot(
+              toCanonical(nmDir + '/' + pkg.main),
+              sfsInst,
+            );
             if (resolved) return resolved;
           }
           const resolved = tryResolveInSnapshot(nmDir + '/index', sfsInst);
           if (resolved) return resolved;
         } else {
-          const resolved = tryResolveInSnapshot(toCanonical(nmDir + subpath), sfsInst);
+          const resolved = tryResolveInSnapshot(
+            toCanonical(nmDir + subpath),
+            sfsInst,
+          );
           if (resolved) return resolved;
         }
         return null;

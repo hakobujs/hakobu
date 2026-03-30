@@ -37,7 +37,9 @@ function withProject(pkgJson) {
 }
 
 function cleanup(dir) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {}
 }
 
 console.log('\n=== Config Normalization Tests ===\n');
@@ -47,22 +49,24 @@ console.log('\n=== Config Normalization Tests ===\n');
 test('modern: reads "hakobu" field from package.json', () => {
   const dir = withProject({
     name: 'test',
-    hakobu: { entry: 'src/main.js', assets: ['templates/**'] }
+    hakobu: { entry: 'src/main.js', assets: ['templates/**'] },
   });
   try {
     const { options, warnings } = normalizeConfig({ projectRoot: dir });
     assert.strictEqual(options.entry, 'src/main.js');
     assert.deepStrictEqual(options.assets, ['templates/**']);
     // No legacy warnings
-    const legacyWarnings = warnings.filter(w => w.option === 'pkg');
+    const legacyWarnings = warnings.filter((w) => w.option === 'pkg');
     assert.strictEqual(legacyWarnings.length, 0);
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('modern: CLI flags override package.json config', () => {
   const dir = withProject({
     name: 'test',
-    hakobu: { entry: 'src/main.js', target: 'node24-linux-x64' }
+    hakobu: { entry: 'src/main.js', target: 'node24-linux-x64' },
   });
   try {
     const { options } = normalizeConfig({
@@ -72,19 +76,23 @@ test('modern: CLI flags override package.json config', () => {
     });
     assert.strictEqual(options.entry, 'cli.js');
     assert.strictEqual(options.target, 'node24-macos-arm64');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('modern: bundle config from package.json', () => {
   const dir = withProject({
     name: 'test',
-    hakobu: { bundle: true, bundleExternal: ['electron'] }
+    hakobu: { bundle: true, bundleExternal: ['electron'] },
   });
   try {
     const { options } = normalizeConfig({ projectRoot: dir });
     assert.strictEqual(options.bundle, true);
     assert.deepStrictEqual(options.bundleExternal, ['electron']);
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── Legacy config ──
@@ -92,67 +100,83 @@ test('modern: bundle config from package.json', () => {
 test('legacy: reads "pkg" field with migration warning', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { assets: ['views/**'] }
+    pkg: { assets: ['views/**'] },
   });
   try {
     const { options, warnings } = normalizeConfig({ projectRoot: dir });
     assert.deepStrictEqual(options.assets, ['views/**']);
-    const pkgWarning = warnings.find(w => w.option === 'pkg' && w.type === 'migrated');
+    const pkgWarning = warnings.find(
+      (w) => w.option === 'pkg' && w.type === 'migrated',
+    );
     assert(pkgWarning, 'should have migration warning for pkg field');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('legacy: pkg.scripts mapped to assets', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { scripts: ['lib/**/*.js'], assets: ['data/**'] }
+    pkg: { scripts: ['lib/**/*.js'], assets: ['data/**'] },
   });
   try {
     const { options, warnings } = normalizeConfig({ projectRoot: dir });
     assert.deepStrictEqual(options.assets, ['data/**', 'lib/**/*.js']);
-    const scriptWarning = warnings.find(w => w.option === 'pkg.scripts');
+    const scriptWarning = warnings.find((w) => w.option === 'pkg.scripts');
     assert(scriptWarning, 'should have migration warning for pkg.scripts');
     assert.strictEqual(scriptWarning.type, 'migrated');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('legacy: pkg.targets takes first target with warning', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { targets: ['node18-linux-x64', 'node18-win-x64'] }
+    pkg: { targets: ['node18-linux-x64', 'node18-win-x64'] },
   });
   try {
     const { options, warnings } = normalizeConfig({ projectRoot: dir });
     assert.strictEqual(options.target, 'node18-linux-x64');
-    const multiWarning = warnings.find(w => w.option === 'pkg.targets' && w.type === 'deprecated');
+    const multiWarning = warnings.find(
+      (w) => w.option === 'pkg.targets' && w.type === 'deprecated',
+    );
     assert(multiWarning, 'should warn about multi-target');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('legacy: pkg.outputPath mapped to output', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { outputPath: './dist' }
+    pkg: { outputPath: './dist' },
   });
   try {
     const { options } = normalizeConfig({ projectRoot: dir });
     assert.strictEqual(options.output, './dist');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('legacy: "hakobu" takes priority over "pkg"', () => {
   const dir = withProject({
     name: 'test',
     hakobu: { entry: 'modern.js' },
-    pkg: { assets: ['old/**'] }
+    pkg: { assets: ['old/**'] },
   });
   try {
     const { options, warnings } = normalizeConfig({ projectRoot: dir });
     assert.strictEqual(options.entry, 'modern.js');
     assert.strictEqual(options.assets, undefined); // pkg.assets ignored
-    const bothWarning = warnings.find(w => w.option === 'pkg' && w.type === 'deprecated');
+    const bothWarning = warnings.find(
+      (w) => w.option === 'pkg' && w.type === 'deprecated',
+    );
     assert(bothWarning, 'should warn about both fields present');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── Unsupported legacy options ──
@@ -160,27 +184,31 @@ test('legacy: "hakobu" takes priority over "pkg"', () => {
 test('legacy: pkg.patches rejected as unsupported', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { patches: { 'some-pkg': [] } }
+    pkg: { patches: { 'some-pkg': [] } },
   });
   try {
     const { warnings } = normalizeConfig({ projectRoot: dir });
-    const w = warnings.find(w => w.option === 'pkg.patches');
+    const w = warnings.find((w) => w.option === 'pkg.patches');
     assert(w, 'should have unsupported warning for patches');
     assert.strictEqual(w.type, 'unsupported');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('legacy: pkg.dictionary rejected as unsupported', () => {
   const dir = withProject({
     name: 'test',
-    pkg: { dictionary: { 'some-pkg': {} } }
+    pkg: { dictionary: { 'some-pkg': {} } },
   });
   try {
     const { warnings } = normalizeConfig({ projectRoot: dir });
-    const w = warnings.find(w => w.option === 'pkg.dictionary');
+    const w = warnings.find((w) => w.option === 'pkg.dictionary');
     assert(w);
     assert.strictEqual(w.type, 'unsupported');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── CLI compatibility and validation ──
@@ -188,42 +216,59 @@ test('legacy: pkg.dictionary rejected as unsupported', () => {
 test('cli: --no-bytecode rejected', () => {
   const dir = withProject({ name: 'test' });
   try {
-    const { warnings } = normalizeConfig({ projectRoot: dir, 'no-bytecode': true });
-    const w = warnings.find(w => w.option === '--no-bytecode');
+    const { warnings } = normalizeConfig({
+      projectRoot: dir,
+      'no-bytecode': true,
+    });
+    const w = warnings.find((w) => w.option === '--no-bytecode');
     assert(w);
     assert.strictEqual(w.type, 'unsupported');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('cli: --sea rejected', () => {
   const dir = withProject({ name: 'test' });
   try {
     const { warnings } = normalizeConfig({ projectRoot: dir, sea: true });
-    const w = warnings.find(w => w.option === '--sea');
+    const w = warnings.find((w) => w.option === '--sea');
     assert(w);
     assert.strictEqual(w.type, 'unsupported');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('cli: --compress accepted', () => {
   const dir = withProject({ name: 'test' });
   try {
-    const { options, warnings } = normalizeConfig({ projectRoot: dir, compress: 'GZip' });
-    const w = warnings.find(w => w.option === '--compress');
+    const { options, warnings } = normalizeConfig({
+      projectRoot: dir,
+      compress: 'GZip',
+    });
+    const w = warnings.find((w) => w.option === '--compress');
     assert.strictEqual(w, undefined);
     assert.strictEqual(options.compress, 'gzip');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('cli: invalid --compress rejected', () => {
   const dir = withProject({ name: 'test' });
   try {
-    const { options, warnings } = normalizeConfig({ projectRoot: dir, compress: 'LZMA' });
-    const w = warnings.find(w => w.option === '--compress');
+    const { options, warnings } = normalizeConfig({
+      projectRoot: dir,
+      compress: 'LZMA',
+    });
+    const w = warnings.find((w) => w.option === '--compress');
     assert(w);
     assert.strictEqual(w.type, 'unsupported');
     assert.strictEqual(options.compress, undefined);
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── Legacy CLI aliases ──
@@ -236,11 +281,17 @@ test('cli: --targets (plural) accepted with warning', () => {
       targets: 'node24-linux-x64,node24-win-x64',
     });
     assert.strictEqual(options.target, 'node24-linux-x64');
-    const w = warnings.find(w => w.option === '--targets' && w.type === 'migrated');
+    const w = warnings.find(
+      (w) => w.option === '--targets' && w.type === 'migrated',
+    );
     assert(w);
-    const multi = warnings.find(w => w.option === '--targets' && w.type === 'deprecated');
+    const multi = warnings.find(
+      (w) => w.option === '--targets' && w.type === 'deprecated',
+    );
     assert(multi, 'should warn about multi-target');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 test('cli: --out-path accepted with warning', () => {
@@ -251,10 +302,12 @@ test('cli: --out-path accepted with warning', () => {
       'out-path': './build',
     });
     assert.strictEqual(options.output, './build');
-    const w = warnings.find(w => w.option === '--out-path');
+    const w = warnings.find((w) => w.option === '--out-path');
     assert(w);
     assert.strictEqual(w.type, 'migrated');
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── No config ──
@@ -266,7 +319,9 @@ test('no config: works with bare project', () => {
     assert.strictEqual(options.projectRoot, dir);
     assert.strictEqual(options.entry, undefined);
     assert.strictEqual(warnings.length, 0);
-  } finally { cleanup(dir); }
+  } finally {
+    cleanup(dir);
+  }
 });
 
 // ── Summary ──

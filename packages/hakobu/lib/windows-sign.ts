@@ -73,14 +73,18 @@ export function hasWindowsSigningCredentials(certPath?: string): boolean {
  */
 export function signWindowsExecutable(opts: WindowsSignOptions): void {
   const certPath = opts.certPath || process.env.HAKOBU_WIN_CERT;
-  const certPassword = opts.certPassword || process.env.HAKOBU_WIN_CERT_PASSWORD;
-  const timestampUrl = opts.timestampUrl || process.env.HAKOBU_WIN_TIMESTAMP_URL || DEFAULT_TIMESTAMP_URL;
+  const certPassword =
+    opts.certPassword || process.env.HAKOBU_WIN_CERT_PASSWORD;
+  const timestampUrl =
+    opts.timestampUrl ||
+    process.env.HAKOBU_WIN_TIMESTAMP_URL ||
+    DEFAULT_TIMESTAMP_URL;
 
   if (!certPath) {
     throw new Error(
       'Cannot sign Windows executable: no certificate configured.\n' +
-      'Set HAKOBU_WIN_CERT to the path of your .pfx/.p12 file.\n' +
-      'See docs/windows-signing.md for setup instructions.'
+        'Set HAKOBU_WIN_CERT to the path of your .pfx/.p12 file.\n' +
+        'See docs/windows-signing.md for setup instructions.',
     );
   }
 
@@ -96,9 +100,9 @@ export function signWindowsExecutable(opts: WindowsSignOptions): void {
 
   throw new Error(
     'Authenticode signing failed: neither signtool.exe nor osslsigncode found.\n' +
-    'On Windows: install Windows SDK (provides signtool.exe).\n' +
-    'On macOS/Linux: install osslsigncode (brew install osslsigncode / apt install osslsigncode).\n' +
-    'See docs/windows-signing.md for details.'
+      'On Windows: install Windows SDK (provides signtool.exe).\n' +
+      'On macOS/Linux: install osslsigncode (brew install osslsigncode / apt install osslsigncode).\n' +
+      'See docs/windows-signing.md for details.',
   );
 }
 
@@ -114,10 +118,14 @@ function trySigntool(
 ): boolean {
   const args = [
     'sign',
-    '/f', certPath,
-    '/fd', 'SHA256',
-    '/tr', timestampUrl,
-    '/td', 'SHA256',
+    '/f',
+    certPath,
+    '/fd',
+    'SHA256',
+    '/tr',
+    timestampUrl,
+    '/td',
+    'SHA256',
   ];
 
   if (certPassword) {
@@ -136,7 +144,7 @@ function trySigntool(
     // signtool found but signing failed — throw
     throw new Error(
       `signtool signing failed: ${err.message}\n` +
-      'Check that your certificate is valid and the password is correct.'
+        'Check that your certificate is valid and the password is correct.',
     );
   }
 }
@@ -156,11 +164,16 @@ function tryOsslsigncode(
   const tmpOut = executable + '.signed';
   const args = [
     'sign',
-    '-pkcs12', certPath,
-    '-h', 'sha256',
-    '-ts', timestampUrl,
-    '-in', executable,
-    '-out', tmpOut,
+    '-pkcs12',
+    certPath,
+    '-h',
+    'sha256',
+    '-ts',
+    timestampUrl,
+    '-in',
+    executable,
+    '-out',
+    tmpOut,
   ];
 
   if (certPassword) {
@@ -176,11 +189,13 @@ function tryOsslsigncode(
     return true;
   } catch (err: any) {
     // Clean up temp file on failure
-    try { require('fs').unlinkSync(tmpOut); } catch {}
+    try {
+      require('fs').unlinkSync(tmpOut);
+    } catch {}
     if (err.code === 'ENOENT') return false;
     throw new Error(
       `osslsigncode signing failed: ${err.message}\n` +
-      'Check that your certificate is valid and the password is correct.'
+        'Check that your certificate is valid and the password is correct.',
     );
   }
 }
