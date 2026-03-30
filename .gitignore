@@ -29,3 +29,8 @@ yarn-error.log
 # environment
 .env
 .env.local
+
+# separate repos
+hakobujs-landing/
+hakobujs-docs/
+hakobujs-skill/
