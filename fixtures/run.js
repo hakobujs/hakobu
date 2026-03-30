@@ -88,6 +88,51 @@ function needsNativeBuild(fixtureDir) {
   return fs.existsSync(path.join(fixtureDir, 'binding.gyp'));
 }
 
+// Check if a fixture has a pre-built .node binary that doesn't match the host platform.
+// Returns true if the fixture should be skipped.
+function hasMismatchedPrebuild(fixtureDir) {
+  const nmDir = path.join(fixtureDir, 'node_modules');
+  if (!fs.existsSync(nmDir)) return false;
+
+  // Walk node_modules looking for .node files
+  function findNodeFiles(dir) {
+    const results = [];
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          results.push(...findNodeFiles(full));
+        } else if (entry.name.endsWith('.node')) {
+          results.push(full);
+        }
+      }
+    } catch {}
+    return results;
+  }
+
+  const nodeFiles = findNodeFiles(nmDir);
+  if (nodeFiles.length === 0) return false;
+
+  // Check each .node file — if we can't dlopen it, it's mismatched
+  for (const nodeFile of nodeFiles) {
+    try {
+      // Quick sanity: read first bytes to check ELF (Linux) vs Mach-O (macOS) vs PE (Windows)
+      const buf = fs.readFileSync(nodeFile, { encoding: null, flag: 'r' });
+      const header = buf.slice(0, 4);
+      const isELF = header[0] === 0x7f && header[1] === 0x45; // \x7fE
+      const isMachO = (header[0] === 0xcf && header[1] === 0xfa) || (header[0] === 0xce && header[1] === 0xfa);
+      const isPE = header[0] === 0x4d && header[1] === 0x5a; // MZ
+
+      if (process.platform === 'linux' && !isELF) return true;
+      if (process.platform === 'darwin' && !isMachO) return true;
+      if (process.platform === 'win32' && !isPE) return true;
+    } catch {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Build native addon via node-gyp. Returns true on success, false if skipped.
 function buildNativeAddon(fixtureDir) {
   const buildDir = path.join(fixtureDir, 'build', 'Release');
@@ -177,6 +222,17 @@ for (const name of fixtures) {
       totalSkip += nodeOnly ? 2 : 2;
       continue;
     }
+  }
+
+  // ── Skip if pre-built .node binary doesn't match host platform ──
+  if (hasMismatchedPrebuild(dir)) {
+    console.log(`  --  ${name} (node) — skipped (pre-built .node binary not for ${process.platform}/${process.arch})`);
+    totalSkip++;
+    if (!nodeOnly) {
+      console.log(`  --  ${name} (packaged) — skipped (pre-built .node binary not for ${process.platform}/${process.arch})`);
+      totalSkip++;
+    }
+    continue;
   }
 
   // ── Node (unpackaged) ──
