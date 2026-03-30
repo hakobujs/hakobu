@@ -22,11 +22,7 @@
 import path from 'path';
 
 import type { SnapshotFS } from './snapshot-fs';
-import {
-  toCanonical,
-  toFileUrl,
-  fromFileUrl,
-} from './snapshot-path';
+import { toCanonical, toFileUrl, fromFileUrl } from './snapshot-path';
 import {
   resolveExports,
   resolveImports,

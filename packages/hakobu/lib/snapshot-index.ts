@@ -32,11 +32,7 @@
  *                               (Task 6) ESM loader reads the index
  */
 
-import type {
-  PackagingManifest,
-  ModuleFormat,
-  FileKind,
-} from './manifest';
+import type { PackagingManifest, ModuleFormat, FileKind } from './manifest';
 
 // ─────────────────────────────────────────────────────────────────────
 // Snapshot entry
