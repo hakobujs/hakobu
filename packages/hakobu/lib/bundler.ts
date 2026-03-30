@@ -338,7 +338,7 @@ function listBundleFiles(rootDir: string): {
   return { jsFiles, mapFiles };
 }
 
-function resetBundleDir(tmpDir: string): void {
+function _resetBundleDir(tmpDir: string): void {
   fs.rmSync(tmpDir, { recursive: true, force: true });
   fs.mkdirSync(tmpDir, { recursive: true });
 }
@@ -385,7 +385,7 @@ function injectPolyfillIntoFile(filePath: string): void {
   }
 }
 
-function detectSingleChunkFallback(jsFiles: string[]): string | null {
+function _detectSingleChunkFallback(jsFiles: string[]): string | null {
   for (const file of jsFiles) {
     const globals = findUnsafeNodePathGlobals(file);
     if (globals.length > 0) {
@@ -436,7 +436,7 @@ function analyzeBundleDiagnostics(
   warnings: BundleWarning[],
   writeResult: WrittenBundle,
   appliedPatches: string[],
-  userExternals: string[],
+  _userExternals: string[],
 ): BundleDiagnostic[] {
   const diagnostics: BundleDiagnostic[] = [];
 

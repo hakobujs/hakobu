@@ -466,7 +466,6 @@ type VisitorFunction = (node: babelTypes.Node, trying?: boolean) => boolean;
 function traverse(ast: babelTypes.File, visitor: VisitorFunction) {
   // modified esprima-walk to support
   // visitor return value and "trying" flag
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stack: Array<[any, boolean]> = [[ast, false]];
 
   for (let i = 0; i < stack.length; i += 1) {

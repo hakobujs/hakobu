@@ -387,7 +387,6 @@ export async function exec(argv2: string[]) {
       throw wasReported('Config file does not exist', [config]);
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     configJson = require(config); // may be either json or js
 
     if (

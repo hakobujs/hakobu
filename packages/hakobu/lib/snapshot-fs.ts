@@ -28,7 +28,6 @@ import type {
   SnapshotIndex,
   SnapshotEntry,
   SnapshotPackageBoundary,
-  SnapshotDirectory,
 } from './snapshot-index';
 
 import type { ModuleFormat, FileKind } from './manifest';

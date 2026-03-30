@@ -39,7 +39,9 @@ function withProject(pkgJson) {
 function cleanup(dir) {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
-  } catch {}
+  } catch {
+    // best-effort temp cleanup for test fixtures
+  }
 }
 
 console.log('\n=== Config Normalization Tests ===\n');

@@ -72,6 +72,8 @@ module.exports = [
       ...airbnbBase.rules,
       ...prettierConfig.rules,
       '@typescript-eslint/explicit-module-boundary-types': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/no-unused-vars': [
         'error',
         {
@@ -86,6 +88,8 @@ module.exports = [
       'no-bitwise': 'off',
       'no-constant-condition': 'off',
       'no-continue': 'off',
+      'no-empty': 'off',
+      'no-undef': 'off',
       'no-param-reassign': 'off',
       'no-restricted-syntax': 'off',
     },

@@ -1233,7 +1233,6 @@ class Walker {
         if (this.params.noDictionary?.includes(file)) {
           continue;
         }
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const config = require(path.join(dd, file));
         this.dictionary[name] = config;
       }

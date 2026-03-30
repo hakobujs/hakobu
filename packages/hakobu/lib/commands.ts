@@ -11,13 +11,10 @@ import fs from 'fs';
 import path from 'path';
 import { stat } from 'fs/promises';
 
-import { need, system, getNodeVersion } from '@hakobu/hakobu-fetch';
+import { system, getNodeVersion } from '@hakobu/hakobu-fetch';
 // These are internal to hakobu-fetch but we import the compiled JS
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { EXPECTED_HASHES } = require('@hakobu/hakobu-fetch/lib-es5/expected');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const { localPlace } = require('@hakobu/hakobu-fetch/lib-es5/places');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const fetchPkg = require('@hakobu/hakobu-fetch/package.json');
 
 import { analyze } from './analyzer';

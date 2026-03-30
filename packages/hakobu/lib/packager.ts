@@ -773,7 +773,7 @@ function resolveEntryForBundle(projectRoot: string): string {
 async function packageAppInner(
   projectRoot: string,
   options: PackageOptions,
-  bundleOutput: BundleOutput | null,
+  _bundleOutput: BundleOutput | null,
 ): Promise<PackageResult> {
   log.info('Analyzing project...');
 
@@ -1024,7 +1024,7 @@ function manifestToRecords(
   const isEsmEntry = manifest.entry.format === 'esm';
 
   // Add all manifest files to records
-  for (const [snapshotPath, file] of Object.entries(manifest.files)) {
+  for (const [, file] of Object.entries(manifest.files)) {
     const absPath = file.absolutePath;
     const content = fs.readFileSync(absPath);
 

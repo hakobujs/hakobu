@@ -28,7 +28,6 @@ import crypto from 'crypto';
 import os from 'os';
 
 import type { SnapshotFS } from './snapshot-fs';
-import type { SnapshotEntry } from './snapshot-index';
 import { toCanonical } from './snapshot-path';
 import { addonExtractionFailed } from './runtime-diagnostics';
 

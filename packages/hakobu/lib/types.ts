@@ -6,7 +6,6 @@ export interface FileRecord {
   wasTransformed?: boolean; // Track if .mjs was transformed to CJS
   // This could be improved a bit. making this stricter opens up a lot of
   // changes that need to be made throughout the code though
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: number]: any;
 }
 

@@ -22,13 +22,10 @@
 import path from 'path';
 
 import type { SnapshotFS } from './snapshot-fs';
-import type { SnapshotPackageBoundary } from './snapshot-index';
 import {
-  isSnapshotPath,
   toCanonical,
   toFileUrl,
   fromFileUrl,
-  toNative,
 } from './snapshot-path';
 import {
   resolveExports,
@@ -276,7 +273,7 @@ export class ESMResolver {
 
   private resolveSnapshotPath(
     snapshotPath: string,
-    originalSpecifier: string,
+    _originalSpecifier: string,
   ): ResolveResult | null {
     const resolved = tryResolveFile(snapshotPath, this.sfs);
     if (!resolved) return null;

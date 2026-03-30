@@ -18,7 +18,7 @@ const Module = require('module');
 const path = require('path');
 const { promisify } = require('util');
 const { Script } = require('vm');
-const { homedir } = require('os');
+const { homedir, tmpdir } = require('os');
 const util = require('util');
 const {
   brotliDecompress,
@@ -2195,10 +2195,10 @@ function payloadFileSync(pointer) {
         fs.mkdirSync(cachePath, { recursive: true });
         return cachePath;
       }
-    } catch (e) {
+    } catch {
       /* home unavailable or unwritable */
     }
-    return os.tmpdir();
+    return tmpdir();
   }
   const PKG_NATIVE_CACHE_BASE = resolveNativeCacheBase();
 

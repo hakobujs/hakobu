@@ -46,7 +46,6 @@ function resolveWithExports(
     );
 
     // Check if package has exports field
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pkgAny = pkg as any;
     if (!pkgAny.exports) {
       return null;

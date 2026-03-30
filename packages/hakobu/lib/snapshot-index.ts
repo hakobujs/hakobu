@@ -34,8 +34,6 @@
 
 import type {
   PackagingManifest,
-  ManifestFile,
-  PackageMetadata,
   ModuleFormat,
   FileKind,
 } from './manifest';

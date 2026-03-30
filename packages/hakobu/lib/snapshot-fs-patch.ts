@@ -22,7 +22,7 @@
 
 import fs from 'fs';
 import Module from 'module';
-import { SnapshotFS, isSnapshotPath, toNative } from './snapshot-fs';
+import { SnapshotFS, isSnapshotPath } from './snapshot-fs';
 import { toCanonical } from './snapshot-path';
 import { extractAddon } from './addon-extract';
 

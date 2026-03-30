@@ -13,7 +13,6 @@
 
 import fs from 'fs';
 import path from 'path';
-import { log } from './log';
 import type { PackageOptions } from './packager';
 
 // ─────────────────────────────────────────────────────────────────────
